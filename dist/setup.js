@@ -153,7 +153,7 @@ var PLATFORM_SIGNUP_REQUIREMENTS = {
       "1. Complete your profile with bio, website, and images",
       "2. Go to Preferences \u2192 Development \u2192 New application",
       '3. Name: "HyperPost", Scopes: read + write',
-      "4. Copy the access token to your .env file"
+      "4. Copy the access token (the setup wizard will collect this)"
     ],
     verificationNotes: "Mastodon accounts are verified through email confirmation. Some instances may require additional verification."
   },
@@ -251,7 +251,7 @@ var PLATFORM_SIGNUP_REQUIREMENTS = {
       "2. Go to Settings \u2192 Privacy and security \u2192 App passwords",
       '3. Click "Add App Password"',
       '4. Name: "HyperPost"',
-      "5. Copy the generated app password to your .env file"
+      "5. Copy the generated app password (the setup wizard will collect this)"
     ],
     verificationNotes: "Bluesky requires email verification. Accounts must be 16+ years old. App passwords are required for API access (not your main password)."
   },
@@ -315,8 +315,9 @@ var PLATFORM_SIGNUP_REQUIREMENTS = {
       '4. Click the "Generate API Key" button',
       '5. Enter a name like "HyperPost" and click generate',
       "6. Copy the generated API key immediately (it won't be shown again)",
-      "7. Add DEVTO_API_KEY=your_key_here to your .env file"
+      "7. Copy the API key (the setup wizard will collect this)"
     ],
+    setupSteps: [],
     verificationNotes: "Dev.to API keys are available to all verified accounts. If you don't see the API Keys section, try refreshing the page or check if your account needs additional verification. API keys are generated instantly once the section is visible."
   },
   medium: {
@@ -363,8 +364,9 @@ var PLATFORM_SIGNUP_REQUIREMENTS = {
       '2. Scroll down to "Integration tokens"',
       '3. Click "Get integration token"',
       '4. Name it "HyperPost" and create',
-      "5. Copy the token to your .env file as MEDIUM_TOKEN"
+      "5. Copy the integration token (the setup wizard will collect this)"
     ],
+    setupSteps: [],
     verificationNotes: "Medium integration tokens are created instantly. Requires a Medium account."
   }
 };
@@ -457,7 +459,7 @@ var DIFFICULT_PLATFORM_SIGNUP_REQUIREMENTS = {
       '3. Click "New Application"',
       '4. Name: "HyperPost Bot"',
       '5. Go to "Bot" section and click "Add Bot"',
-      "6. Copy the bot token to your .env file",
+      "6. Copy the bot token (the setup wizard will collect this)",
       "7. Get a channel ID from your server (right-click channel \u2192 Copy ID)"
     ],
     verificationNotes: "Discord requires email verification and accounts must be 13+. Bot tokens are separate from user accounts and require a bot application. You need a server and channel to post to. Discord has rate limits on bot posting."
@@ -564,7 +566,7 @@ var DIFFICULT_PLATFORM_SIGNUP_REQUIREMENTS = {
       '3. Click "Create App" or "Create Another App"',
       '4. Type: "script", Name: "HyperPost", Description: "Multi-platform posting"',
       '5. Redirect URI: "http://localhost:8080"',
-      "6. Copy the client_id and secret to your .env file"
+      "6. Copy the client_id and secret (the setup wizard will collect this)"
     ],
     verificationNotes: "Reddit requires email verification. You must create an app in preferences to get API credentials. Reddit has strict API rate limits and requires OAuth for posting. Network connectivity issues may prevent API access."
   },
@@ -732,12 +734,6 @@ var SignupManager = class {
    * Determine the appropriate config directory based on installation type
    */
   getConfigDirectory() {
-    const cwd = process.cwd();
-    const hasPackageJson = fs.existsSync(path.join(cwd, "package.json"));
-    const hasNodeModules = fs.existsSync(path.join(cwd, "node_modules"));
-    if (hasPackageJson || hasNodeModules) {
-      return cwd;
-    }
     const userConfigDir = path.join(os.homedir(), ".config", "hyper-post");
     if (!fs.existsSync(userConfigDir)) {
       fs.mkdirSync(userConfigDir, { recursive: true });
@@ -923,21 +919,19 @@ var colors = {
 };
 var HyperPostSetup = class {
   rl;
-  envPath;
   signupManager;
   isRunning = false;
   constructor() {
-    const isPiped = !process.stdin.isTTY || process.env.CI;
+    const isPiped = !process.stdin.isTTY || process.env.CI === "true";
     this.rl = readline.createInterface({
       input: process.stdin,
-      output: isPiped ? null : process.stdout,
+      output: isPiped ? void 0 : process.stdout,
       terminal: !isPiped
     });
-    this.envPath = path2.join(process.cwd(), ".env");
     this.signupManager = new SignupManager();
   }
   isPipedInput() {
-    return !process.stdin.isTTY || process.env.CI;
+    return !process.stdin.isTTY || process.env.CI === "true";
   }
   printHeader() {
     console.log(`${colors.bright}${colors.cyan}\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557${colors.reset}`);
@@ -955,17 +949,15 @@ var HyperPostSetup = class {
     }
     this.isRunning = true;
     this.printHeader();
-    if (fs2.existsSync(this.envPath)) {
-      console.log(`${colors.blue}\u{1F4C1} Existing Configuration Found:${colors.reset}`);
-      const existingPlatforms = this.signupManager.getConfiguredPlatforms();
-      if (existingPlatforms.length > 0) {
-        console.log(`${colors.green}Currently configured platforms:${colors.reset}`, existingPlatforms.join(", "));
-      } else {
-        console.log(`${colors.yellow}No platforms currently configured.${colors.reset}`);
-      }
-      console.log(`${colors.dim}New platform credentials will be added to existing configuration.${colors.reset}
-`);
+    console.log(`${colors.blue}\u{1F4C1} Configuration Status:${colors.reset}`);
+    const existingPlatforms = this.signupManager.getConfiguredPlatforms();
+    if (existingPlatforms.length > 0) {
+      console.log(`${colors.green}Currently configured platforms:${colors.reset}`, existingPlatforms.join(", "));
+    } else {
+      console.log(`${colors.yellow}No platforms currently configured.${colors.reset}`);
     }
+    console.log(`${colors.dim}New platform credentials will be added to your configuration.${colors.reset}
+`);
     const quickSetup = process.argv.includes("--quick") || process.argv.includes("-q");
     if (quickSetup) {
       await this.quickSetup();
@@ -977,11 +969,25 @@ var HyperPostSetup = class {
     for (const platform of platforms) {
       await this.createPlatformAccount(platform);
     }
-    await this.generateEnvFile();
     console.log(`
 ${colors.bright}${colors.green}\u{1F389} ALL ACCOUNTS CREATED AND CONFIGURED!${colors.reset}`);
     console.log(`${colors.cyan}You can now post to all platforms with:${colors.reset}`);
     console.log(`${colors.yellow}hyper-post post -c "Your message" -t "Title" -u "https://link.com"${colors.reset}`);
+    this.rl.close();
+    this.isRunning = false;
+  }
+  async quickSetup() {
+    console.log(`${colors.yellow}\u26A1 QUICK SETUP MODE${colors.reset}`);
+    console.log(`${colors.dim}\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550${colors.reset}`);
+    console.log(`${colors.cyan}This mode will use default values and skip most prompts.${colors.reset}
+`);
+    await this.setupSQLite();
+    const defaultTemplate = this.signupManager.getDefaultTemplate();
+    Object.keys(ALL_PLATFORM_SIGNUP_REQUIREMENTS).forEach((platform) => {
+      this.signupManager.saveTemplate(platform, defaultTemplate);
+    });
+    console.log(`${colors.green}\u2705 Quick setup complete!${colors.reset}`);
+    console.log(`${colors.cyan}You can now configure individual platforms manually.${colors.reset}`);
     this.rl.close();
     this.isRunning = false;
   }
@@ -997,7 +1003,13 @@ ${colors.bright}${colors.green}\u{1F389} ALL ACCOUNTS CREATED AND CONFIGURED!${c
       });
       const reuse = await this.askYesNo("\nReuse existing template for new platforms?");
       if (reuse) {
-        console.log(`${colors.green}\u2705 Using existing template.${colors.reset}
+        const baseTemplate2 = Object.values(existingTemplates)[0];
+        Object.keys(ALL_PLATFORM_SIGNUP_REQUIREMENTS).forEach((platform) => {
+          if (!existingTemplates[platform]) {
+            this.signupManager.saveTemplate(platform, baseTemplate2);
+          }
+        });
+        console.log(`${colors.green}\u2705 Using existing template for all platforms.${colors.reset}
 `);
         return;
       }
@@ -1174,47 +1186,19 @@ ${colors.cyan}\u{1F4CB} Profile Information (consistent across platforms):${colo
         return;
       }
     }
-    console.log(`${colors.cyan}PostgreSQL connection details:${colors.reset}`);
-    const host = await this.askFieldWithDefault({
-      key: "host",
-      label: "Host",
-      description: "PostgreSQL server host (e.g., localhost, db.example.com)",
+    console.log(`${colors.cyan}DATABASE_URL format:${colors.reset}`);
+    console.log(`${colors.dim}postgresql://username:password@host:port/database${colors.reset}`);
+    const currentUser = process.env.USER || "postgres";
+    console.log(`${colors.dim}Example: postgresql://[${currentUser}]@localhost:5432/hyper-post${colors.reset}`);
+    console.log("");
+    const dbUrl = await this.askFieldWithDefault({
+      key: "database_url",
+      label: "DATABASE_URL",
+      description: "Full PostgreSQL connection URL",
       type: "text",
       required: true,
-      defaultValue: "localhost"
+      defaultValue: `postgresql://${currentUser}:password@localhost:5432/hyperpost`
     });
-    const port = await this.askFieldWithDefault({
-      key: "port",
-      label: "Port",
-      description: "PostgreSQL server port",
-      type: "text",
-      required: true,
-      defaultValue: "5432"
-    });
-    const database = await this.askFieldWithDefault({
-      key: "database",
-      label: "Database Name",
-      description: "PostgreSQL database name",
-      type: "text",
-      required: true,
-      defaultValue: "hyperpost"
-    });
-    const username = await this.askFieldWithDefault({
-      key: "username",
-      label: "Username",
-      description: "PostgreSQL username",
-      type: "text",
-      required: true,
-      defaultValue: process.env.USER || "postgres"
-    });
-    const password = await this.askField({
-      key: "password",
-      label: "Password",
-      description: "PostgreSQL password",
-      type: "password",
-      required: true
-    });
-    const dbUrl = `postgresql://${username}:${password}@${host}:${port}/${database}`;
     await this.setupPostgreSQLWithUrl(dbUrl);
   }
   async setupPostgreSQLWithUrl(dbUrl) {
@@ -1233,11 +1217,6 @@ ${colors.cyan}\u{1F4CB} Profile Information (consistent across platforms):${colo
       console.log(`${colors.green}\u2705 Updated schema.prisma for PostgreSQL${colors.reset}`);
       process.env.DATABASE_URL = dbUrl;
       await this.runPrismaCommands();
-      const signupManager = new SignupManager();
-      const configDir = signupManager["configDir"];
-      if (configDir === process.cwd()) {
-        this.saveEnvVariable("DATABASE_URL", dbUrl);
-      }
     } catch (error) {
       console.log(`${colors.yellow}\u26A0\uFE0F  PostgreSQL setup completed with warnings. You may need to run 'pnpm db:generate && pnpm db:push' manually.${colors.reset}`);
       console.log(`${colors.dim}Make sure your PostgreSQL server is running and accessible.${colors.reset}`);
@@ -1256,21 +1235,6 @@ ${colors.cyan}\u{1F4CB} Profile Information (consistent across platforms):${colo
       console.log(`${colors.dim}  pnpm db:generate && pnpm db:push${colors.reset}`);
       throw error;
     }
-  }
-  saveEnvVariable(key, value) {
-    const envPath = path2.join(process.cwd(), ".env");
-    let envContent = "";
-    if (fs2.existsSync(envPath)) {
-      envContent = fs2.readFileSync(envPath, "utf8");
-    }
-    const lines = envContent.split("\n").filter((line) => line.trim());
-    const existingIndex = lines.findIndex((line) => line.startsWith(`${key}=`));
-    if (existingIndex >= 0) {
-      lines[existingIndex] = `${key}=${value}`;
-    } else {
-      lines.push(`${key}=${value}`);
-    }
-    fs2.writeFileSync(envPath, lines.join("\n") + "\n", "utf8");
   }
   async selectPlatforms() {
     console.log(`${colors.bright}${colors.blue}\u{1F3AF} SELECT PLATFORMS TO SET UP${colors.reset}`);
@@ -1492,73 +1456,6 @@ ${colors.bright}${field.label}${colors.reset}${defaultNote}${requiredNote}${maxN
         resolve(answer.toLowerCase() === "y" || answer.toLowerCase() === "yes");
       });
     });
-  }
-  async generateEnvFile() {
-    const newEnvContent = this.signupManager.exportToEnv();
-    let existingContent = "";
-    if (fs2.existsSync(this.envPath)) {
-      existingContent = fs2.readFileSync(this.envPath, "utf8");
-    }
-    const mergedContent = this.mergeEnvContent(existingContent, newEnvContent);
-    fs2.writeFileSync(this.envPath, mergedContent);
-    console.log(`\u{1F4C4} Updated .env file at ${this.envPath} (added new platform credentials)`);
-  }
-  mergeEnvContent(existing, newContent) {
-    const existingLines = existing.split("\n").filter((line) => line.trim());
-    const newLines = newContent.split("\n").filter((line) => line.trim());
-    const existingVars = /* @__PURE__ */ new Map();
-    const existingComments = [];
-    for (const line of existingLines) {
-      if (line.startsWith("#")) {
-        existingComments.push(line);
-      } else if (line.includes("=")) {
-        const [key, ...valueParts] = line.split("=");
-        existingVars.set(key.trim(), valueParts.join("=").trim());
-      }
-    }
-    for (const line of newLines) {
-      if (!line.startsWith("#") && line.includes("=")) {
-        const [key, ...valueParts] = line.split("=");
-        existingVars.set(key.trim(), valueParts.join("=").trim());
-      }
-    }
-    const result = [];
-    result.push("# HyperPost Configuration");
-    result.push("# Generated and updated by setup wizard");
-    result.push("# Genuine accounts with complete profiles");
-    result.push("");
-    const platformGroups = {};
-    const otherVars = [];
-    for (const [key, value] of existingVars) {
-      const platformMatch = key.match(/^([A-Z]+)_/);
-      if (platformMatch) {
-        const platform = platformMatch[1].toLowerCase();
-        if (!platformGroups[platform]) {
-          platformGroups[platform] = [];
-        }
-        platformGroups[platform].push(`${key}=${value}`);
-      } else {
-        otherVars.push(`${key}=${value}`);
-      }
-    }
-    const platformOrder = ["mastodon", "bluesky", "reddit", "discord"];
-    for (const platform of platformOrder) {
-      if (platformGroups[platform]) {
-        result.push(`# ========================================`);
-        result.push(`# ${platform.toUpperCase()}`);
-        result.push(`# ========================================`);
-        result.push(...platformGroups[platform]);
-        result.push("");
-      }
-    }
-    if (otherVars.length > 0) {
-      result.push("# ========================================");
-      result.push("# OTHER SETTINGS");
-      result.push("# ========================================");
-      result.push(...otherVars);
-      result.push("");
-    }
-    return result.join("\n");
   }
 };
 // Annotate the CommonJS export names for ESM import in node:

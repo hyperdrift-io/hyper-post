@@ -1,13 +1,9 @@
 import { Command } from 'commander';
-import { config } from 'dotenv';
 import { HyperPost } from './HyperPost';
 import { SocialPost } from './types';
 import { SignupManager } from './signup-manager';
 import { prisma } from './database';
 import * as crypto from 'crypto';
-
-// Load environment variables
-config();
 
 const program = new Command();
 
@@ -106,7 +102,7 @@ program
       const platforms = hyperPost.getConfiguredPlatforms();
 
       if (platforms.length === 0) {
-        console.log('No platforms configured. Check your .env file or run setup.');
+        console.log('No platforms configured. Run setup to configure platforms.');
         console.log('Run "hyper-post setup" to configure platforms interactively.');
       } else {
         console.log('Configured platforms:');
@@ -133,65 +129,12 @@ program
 function loadCredentials(): any {
   const credentials: any = {};
 
-  // First load from SignupManager (persistent data)
+  // Load from SignupManager (persistent data)
   const signupManager = new SignupManager();
   const completedAccounts = signupManager.getAllCompletedAccounts();
 
   for (const [platform, accountData] of Object.entries(completedAccounts)) {
     credentials[platform] = accountData;
-  }
-
-  // Then load/override from environment variables (.env file)
-  // Mastodon
-  if (process.env.MASTODON_INSTANCE && process.env.MASTODON_ACCESS_TOKEN) {
-    credentials.mastodon = {
-      instance: process.env.MASTODON_INSTANCE,
-      accessToken: process.env.MASTODON_ACCESS_TOKEN
-    };
-  }
-
-  // Bluesky
-  if (process.env.BLUESKY_IDENTIFIER && process.env.BLUESKY_PASSWORD) {
-    credentials.bluesky = {
-      identifier: process.env.BLUESKY_IDENTIFIER,
-      password: process.env.BLUESKY_PASSWORD
-    };
-  }
-
-  // Discord - disabled due to rate limiting
-  if (process.env.DISCORD_DISABLED !== 'true' &&
-      process.env.DISCORD_TOKEN && process.env.DISCORD_CHANNEL_ID) {
-    credentials.discord = {
-      token: process.env.DISCORD_TOKEN,
-      channelId: process.env.DISCORD_CHANNEL_ID
-    };
-  }
-
-  // Dev.to
-  if (process.env.DEVTO_API_KEY) {
-    credentials.devto = {
-      apiKey: process.env.DEVTO_API_KEY
-    };
-  }
-
-  // Medium
-  if (process.env.MEDIUM_TOKEN) {
-    credentials.medium = {
-      integrationToken: process.env.MEDIUM_TOKEN
-    };
-  }
-
-  // Reddit - disabled due to network connectivity issues
-  if (process.env.REDDIT_DISABLED !== 'true' &&
-      process.env.REDDIT_CLIENTID && process.env.REDDIT_CLIENTSECRET &&
-      process.env.REDDIT_USERNAME && process.env.REDDIT_PASSWORD) {
-    credentials.reddit = {
-      clientId: process.env.REDDIT_CLIENTID,
-      clientSecret: process.env.REDDIT_CLIENTSECRET,
-      username: process.env.REDDIT_USERNAME,
-      password: process.env.REDDIT_PASSWORD,
-      subreddit: process.env.REDDIT_SUBREDDIT
-    };
   }
 
   return credentials;

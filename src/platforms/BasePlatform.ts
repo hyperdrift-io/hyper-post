@@ -33,7 +33,7 @@ export abstract class BasePlatform {
    */
   abstract discoverPosts(limit?: number): Promise<Array<{url: string, content: string, createdAt: Date, analytics: PostAnalytics}>>;
 
-  protected validateCredentials(): void {
+  public validateCredentials(): void {
     const requiredFields = this.getRequiredCredentials();
     const missing = requiredFields.filter(field => !this.credentials[field]);
 

@@ -57,7 +57,7 @@ declare abstract class BasePlatform {
         createdAt: Date;
         analytics: PostAnalytics;
     }>>;
-    protected validateCredentials(): void;
+    validateCredentials(): void;
     protected abstract getRequiredCredentials(): string[];
     protected createResult(success: boolean, postId?: string, url?: string, error?: string): PostingResult;
 }

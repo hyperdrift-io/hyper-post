@@ -1,12 +1,10 @@
 # Dependencies
 node_modules/
 
-# Environment files (NEVER commit these!)
-.env
-.env.local
-.env.*.local
-.env.*.updated
-*.env
+# Configuration files are stored securely in:
+# ~/.config/hyper-post/signup-data.json (credentials & templates)
+# ~/.config/hyper-post/config.json (default template settings)
+# These are never stored in the project directory
 
 # Logs
 *.log

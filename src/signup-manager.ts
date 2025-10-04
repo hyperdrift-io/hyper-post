@@ -35,9 +35,9 @@ const FALLBACK_DEFAULT_TEMPLATE: SignupTemplate = {
 
 export class SignupManager {
   private dataPath: string;
-  private data: PersistedSignupData;
+  private data!: PersistedSignupData;
   private configPath: string;
-  private config: HyperPostConfig;
+  private config!: HyperPostConfig;
   private configDir: string;
 
   constructor() {
@@ -66,17 +66,8 @@ export class SignupManager {
    * Determine the appropriate config directory based on installation type
    */
   private getConfigDirectory(): string {
-    // Check if we're in a project directory (has package.json or node_modules)
-    const cwd = process.cwd();
-    const hasPackageJson = fs.existsSync(path.join(cwd, 'package.json'));
-    const hasNodeModules = fs.existsSync(path.join(cwd, 'node_modules'));
-
-    // If we're in a project directory, use current working directory for project-specific config
-    if (hasPackageJson || hasNodeModules) {
-      return cwd;
-    }
-
-    // For global CLI usage, use user config directory
+    // Always use user config directory for CLI usage
+    // This ensures consistent behavior regardless of where the CLI is run from
     const userConfigDir = path.join(os.homedir(), '.config', 'hyper-post');
 
     // Create the directory if it doesn't exist
