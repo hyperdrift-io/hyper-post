@@ -1,0 +1,71 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Post {
+  id          String   @id @default(cuid())
+  contentHash String   @unique
+  title       String?
+  content     String
+  url         String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  postPlatforms PostPlatform[]
+
+  @@map("posts")
+}
+
+model Platform {
+  id          String @id @default(cuid())
+  name        String @unique // mastodon, bluesky, reddit, discord
+  displayName String
+  createdAt   DateTime @default(now())
+
+  // Relations
+  postPlatforms PostPlatform[]
+
+  @@map("platforms")
+}
+
+model PostPlatform {
+  id        String   @id @default(cuid())
+  postId    String
+  platformId String
+  postUrl   String?  // URL of the post on the platform
+  postedAt  DateTime @default(now())
+
+  // Relations
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  platform  Platform @relation(fields: [platformId], references: [id], onDelete: Cascade)
+  analytics PostAnalytics[] // Relation to analytics
+
+  @@unique([postId, platformId])
+  @@map("post_platforms")
+}
+
+model PostAnalytics {
+  id              String   @id @default(cuid())
+  postPlatformId  String
+  metric          String   // likes, reposts, replies, views, etc.
+  value           Int      @default(0)
+  recordedAt      DateTime @default(now())
+
+  // Relations
+  postPlatform    PostPlatform @relation(fields: [postPlatformId], references: [id], onDelete: Cascade)
+
+  @@unique([postPlatformId, metric])
+  @@map("post_analytics")
+}
+
+// Indexes for performance
+// Note: Indexes are automatically created for @unique and foreign key fields

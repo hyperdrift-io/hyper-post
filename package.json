@@ -1,0 +1,66 @@
+{
+  "name": "hyper-post",
+  "version": "0.1.0",
+  "description": "A unified social media posting tool for underground platforms - publish to multiple social networks in one go",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "hyper-post": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "jest",
+    "lint": "eslint src/**/*.ts",
+    "typecheck": "tsc --noEmit",
+    "setup": "node dist/setup.js",
+    "cli": "node dist/cli.js",
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "db:studio": "prisma studio",
+    "db:migrate": "prisma migrate dev",
+    "db:seed": "tsx prisma/seed.ts"
+  },
+  "keywords": [
+    "social-media",
+    "posting",
+    "automation",
+    "mastodon",
+    "bluesky",
+    "threads",
+    "discord",
+    "social-networking"
+  ],
+  "author": "HyperDrift <yann@hyperdrift.io>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hyperdrift-io/hyper-post.git"
+  },
+  "dependencies": {
+    "mastodon-api": "^1.3.0",
+    "@atproto/api": "^0.12.0",
+    "discord.js": "^14.14.1",
+    "axios": "^1.6.0",
+    "dotenv": "^16.3.1",
+    "zod": "^3.22.4",
+    "commander": "^11.1.0",
+    "@prisma/client": "^5.7.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.8.0",
+    "prisma": "^5.7.0",
+    "tsx": "^4.7.0",
+    "tsup": "^7.2.0",
+    "typescript": "^5.2.2",
+    "jest": "^29.7.0",
+    "@types/jest": "^29.5.5",
+    "eslint": "^8.51.0",
+    "@typescript-eslint/eslint-plugin": "^6.7.5",
+    "@typescript-eslint/parser": "^6.7.5"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
