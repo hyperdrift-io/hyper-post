@@ -1,13 +1,9 @@
 import { Command } from 'commander';
-import { config } from 'dotenv';
 import { HyperPost } from './HyperPost';
 import { SocialPost } from './types';
 import { SignupManager } from './signup-manager';
 import { prisma } from './database';
 import * as crypto from 'crypto';
-
-// Load environment variables
-config();
 
 const program = new Command();
 
@@ -133,7 +129,7 @@ program
 function loadCredentials(): any {
   const credentials: any = {};
 
-  // First load from SignupManager (persistent data)
+  // First load from SignupManager (persistent data from ~/.config/hyper-post/)
   const signupManager = new SignupManager();
   const completedAccounts = signupManager.getAllCompletedAccounts();
 
@@ -141,7 +137,7 @@ function loadCredentials(): any {
     credentials[platform] = accountData;
   }
 
-  // Then load/override from environment variables (.env file)
+  // Then override with environment variables (for CI/CD, Docker, or temporary overrides)
   // Mastodon
   if (process.env.MASTODON_INSTANCE && process.env.MASTODON_ACCESS_TOKEN) {
     credentials.mastodon = {

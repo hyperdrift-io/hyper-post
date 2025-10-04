@@ -1,0 +1,20 @@
+{
+  "defaultTemplate": {
+    "username": "hyperdrift",
+    "displayName": "HyperDrift",
+    "email": "yann@hyperdrift.io",
+    "bio": "Building the future of software development. Open-source tools for independent developers and communities. #Web3 #OpenSource #DeveloperTools",
+    "description": "HyperDrift is an ecosystem of small but focused apps, tools, and thoughts. We build software that solves real problems, shares ideas openly, and puts developers first.",
+    "website": "https://hyperdrift.io",
+    "location": "Digital Nomad",
+    "accountType": "project",
+    "primaryTopics": [
+      "web3",
+      "opensource",
+      "developer-tools",
+      "productivity",
+      "community"
+    ],
+    "targetAudience": "Independent developers, open-source contributors, and communities building the future of software"
+  }
+}

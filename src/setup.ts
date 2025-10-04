@@ -87,6 +87,9 @@ class HyperPostSetup {
       return;
     }
 
+    // Set up database first
+    const dbChoice = await this.selectDatabase();
+
     // Create signup templates
     await this.createSignupTemplates();
 
@@ -219,6 +222,44 @@ class HyperPostSetup {
     console.log(`${colors.green}✅ Signup templates created and saved!${colors.reset}\n`);
   }
 
+  private async selectDatabase(): Promise<'sqlite' | 'postgresql'> {
+    console.log(`${colors.bright}${colors.blue}🗄️  DATABASE SETUP${colors.reset}`);
+    console.log(`${colors.dim}═══════════════${colors.reset}`);
+
+    console.log(`${colors.cyan}Choose your database:${colors.reset}`);
+    console.log(`${colors.green}1.${colors.reset} SQLite (Recommended) - Simple, no setup required`);
+    console.log(`${colors.yellow}2.${colors.reset} PostgreSQL - Advanced, requires PostgreSQL server`);
+    console.log('');
+
+    // Check if we already have a database configured
+    const hasExistingSchema = fs.existsSync(path.join(process.cwd(), 'schema.prisma'));
+    if (hasExistingSchema) {
+      console.log(`${colors.blue}📁 Existing database schema found. We'll update it with your choice.${colors.reset}`);
+      console.log('');
+    }
+
+    while (true) {
+      const choice = await this.askField({
+        key: 'database',
+        label: 'Database Choice (1-2)',
+        description: 'Choose database type',
+        type: 'text',
+        required: true
+      });
+
+      switch (choice) {
+        case '1':
+          await this.setupSQLite();
+          return 'sqlite';
+        case '2':
+          await this.setupPostgreSQL();
+          return 'postgresql';
+        default:
+          console.log(`${colors.red}❌ Please choose 1 or 2.${colors.reset}`);
+      }
+    }
+  }
+
   private async selectAccountType(): Promise<'personal' | 'business' | 'community' | 'project'> {
     console.log(`${colors.cyan}What type of account is this?${colors.reset}`);
     console.log(`${colors.yellow}1.${colors.reset} Personal - Individual developer/streamer`);
@@ -244,6 +285,183 @@ class HyperPostSetup {
           console.log(`${colors.red}❌ Please choose 1, 2, 3, or 4.${colors.reset}`);
       }
     }
+  }
+
+  private async setupSQLite(): Promise<void> {
+    console.log(`${colors.green}📦 Setting up SQLite database...${colors.reset}`);
+
+    try {
+      // Update schema.prisma for SQLite
+      const schemaPath = path.join(process.cwd(), 'schema.prisma');
+      let schemaContent = fs.readFileSync(schemaPath, 'utf8');
+
+      // Replace PostgreSQL with SQLite
+      schemaContent = schemaContent.replace(
+        /datasource db \{\s*provider = "postgresql"/,
+        'datasource db {\n  provider = "sqlite"'
+      );
+
+      // Update the URL for SQLite
+      schemaContent = schemaContent.replace(
+        /url\s*=\s*env\("DATABASE_URL"\)/,
+        'url = "file:./hyperpost.db"'
+      );
+
+      fs.writeFileSync(schemaPath, schemaContent, 'utf8');
+      console.log(`${colors.green}✅ Updated schema.prisma for SQLite${colors.reset}`);
+
+      // Generate Prisma client and create database
+      await this.runPrismaCommands();
+
+    } catch (error) {
+      console.log(`${colors.yellow}⚠️  SQLite setup completed with warnings. You may need to run 'pnpm db:generate && pnpm db:push' manually.${colors.reset}`);
+    }
+  }
+
+  private async setupPostgreSQL(): Promise<void> {
+    console.log(`${colors.yellow}🐘 Setting up PostgreSQL database...${colors.reset}`);
+
+    // Check for existing DATABASE_URL
+    const existingDbUrl = process.env.DATABASE_URL;
+    if (existingDbUrl) {
+      console.log(`${colors.blue}📋 Found existing DATABASE_URL environment variable${colors.reset}`);
+      const useExisting = await this.askYesNo('Use existing DATABASE_URL?');
+      if (useExisting) {
+        await this.setupPostgreSQLWithUrl(existingDbUrl);
+        return;
+      }
+    }
+
+    // Ask for PostgreSQL connection details
+    console.log(`${colors.cyan}PostgreSQL connection details:${colors.reset}`);
+
+    const host = await this.askFieldWithDefault({
+      key: 'host',
+      label: 'Host',
+      description: 'PostgreSQL server host (e.g., localhost, db.example.com)',
+      type: 'text',
+      required: true,
+      defaultValue: 'localhost'
+    });
+
+    const port = await this.askFieldWithDefault({
+      key: 'port',
+      label: 'Port',
+      description: 'PostgreSQL server port',
+      type: 'text',
+      required: true,
+      defaultValue: '5432'
+    });
+
+    const database = await this.askFieldWithDefault({
+      key: 'database',
+      label: 'Database Name',
+      description: 'PostgreSQL database name',
+      type: 'text',
+      required: true,
+      defaultValue: 'hyperpost'
+    });
+
+    const username = await this.askFieldWithDefault({
+      key: 'username',
+      label: 'Username',
+      description: 'PostgreSQL username',
+      type: 'text',
+      required: true,
+      defaultValue: process.env.USER || 'postgres'
+    });
+
+    const password = await this.askField({
+      key: 'password',
+      label: 'Password',
+      description: 'PostgreSQL password',
+      type: 'password',
+      required: true
+    });
+
+    const dbUrl = `postgresql://${username}:${password}@${host}:${port}/${database}`;
+    await this.setupPostgreSQLWithUrl(dbUrl);
+  }
+
+  private async setupPostgreSQLWithUrl(dbUrl: string): Promise<void> {
+    try {
+      // Update schema.prisma for PostgreSQL
+      const schemaPath = path.join(process.cwd(), 'schema.prisma');
+      let schemaContent = fs.readFileSync(schemaPath, 'utf8');
+
+      // Ensure it's set to PostgreSQL
+      schemaContent = schemaContent.replace(
+        /datasource db \{\s*provider = "[^"]*"/,
+        'datasource db {\n  provider = "postgresql"'
+      );
+
+      // Update the URL
+      schemaContent = schemaContent.replace(
+        /url\s*=\s*"[^"]*"/,
+        `url = env("DATABASE_URL")`
+      );
+
+      fs.writeFileSync(schemaPath, schemaContent, 'utf8');
+      console.log(`${colors.green}✅ Updated schema.prisma for PostgreSQL${colors.reset}`);
+
+      // Set DATABASE_URL environment variable for this session
+      process.env.DATABASE_URL = dbUrl;
+
+      // Generate Prisma client and create database
+      await this.runPrismaCommands();
+
+      // Save DATABASE_URL to .env if we're in project mode
+      const signupManager = new SignupManager();
+      const configDir = signupManager['configDir'];
+      if (configDir === process.cwd()) {
+        // Project mode - save to .env
+        this.saveEnvVariable('DATABASE_URL', dbUrl);
+      }
+
+    } catch (error) {
+      console.log(`${colors.yellow}⚠️  PostgreSQL setup completed with warnings. You may need to run 'pnpm db:generate && pnpm db:push' manually.${colors.reset}`);
+      console.log(`${colors.dim}Make sure your PostgreSQL server is running and accessible.${colors.reset}`);
+    }
+  }
+
+  private async runPrismaCommands(): Promise<void> {
+    const { execSync } = require('child_process');
+
+    try {
+      console.log(`${colors.blue}🔄 Generating Prisma client...${colors.reset}`);
+      execSync('npx prisma generate', { stdio: 'inherit' });
+
+      console.log(`${colors.blue}📦 Setting up database schema...${colors.reset}`);
+      execSync('npx prisma db push', { stdio: 'inherit' });
+
+      console.log(`${colors.green}✅ Database setup complete!${colors.reset}`);
+    } catch (error) {
+      console.log(`${colors.yellow}⚠️  Prisma commands failed. You may need to run them manually:${colors.reset}`);
+      console.log(`${colors.dim}  pnpm db:generate && pnpm db:push${colors.reset}`);
+      throw error;
+    }
+  }
+
+  private saveEnvVariable(key: string, value: string): void {
+    const envPath = path.join(process.cwd(), '.env');
+    let envContent = '';
+
+    // Read existing .env if it exists
+    if (fs.existsSync(envPath)) {
+      envContent = fs.readFileSync(envPath, 'utf8');
+    }
+
+    // Add or update the variable
+    const lines = envContent.split('\n').filter(line => line.trim());
+    const existingIndex = lines.findIndex(line => line.startsWith(`${key}=`));
+
+    if (existingIndex >= 0) {
+      lines[existingIndex] = `${key}=${value}`;
+    } else {
+      lines.push(`${key}=${value}`);
+    }
+
+    fs.writeFileSync(envPath, lines.join('\n') + '\n', 'utf8');
   }
 
   private async selectPlatforms(): Promise<string[]> {
@@ -361,7 +579,7 @@ class HyperPostSetup {
       const isPiped = this.isPipedInput();
 
       if (!isPiped) {
-        const prompt = field.sensitive ? '(hidden) ' : '';
+        const prompt = (field.sensitive || field.type === 'password') ? '(hidden) ' : '';
         const maxNote = field.maxLength ? ` (max ${field.maxLength} chars)` : '';
         const requiredNote = field.required ? ' *' : '';
 
@@ -374,31 +592,71 @@ class HyperPostSetup {
         }
       }
 
-      this.rl.question(isPiped ? '' : '> ', (answer) => {
-        // Validate answer
-        if (!answer && field.required) {
-          if (!isPiped) console.log(`❌ ${field.label} is required.`);
-          resolve(this.askField(field));
-          return;
-        }
+      // For password fields, hide input
+      if (field.type === 'password' && !isPiped) {
+        // Use a different readline interface for password input
+        const { createInterface } = require('readline');
+        const passwordRl = createInterface({
+          input: process.stdin,
+          output: process.stdout,
+          terminal: true
+        });
 
-        if (answer && field.validation) {
-          const validationResult = field.validation(answer);
-          if (validationResult !== true) {
-            if (!isPiped) console.log(`❌ ${validationResult}`);
+        passwordRl.question('> ', (answer) => {
+          passwordRl.close();
+          resolve(answer);
+        });
+
+        // Hide password input by intercepting stdout
+        const stdout = process.stdout;
+        let muted = false;
+        const oldWrite = stdout.write;
+        stdout.write = function(chunk: any, encoding?: any, callback?: any) {
+          if (!muted && chunk === '> ') {
+            muted = true;
+            oldWrite.call(this, chunk, encoding, callback);
+          } else if (muted && chunk === '\n') {
+            muted = false;
+            oldWrite.call(this, chunk, encoding, callback);
+          } else if (muted) {
+            // Don't show the actual password characters
+            oldWrite.call(this, '*', encoding, callback);
+          } else {
+            oldWrite.call(this, chunk, encoding, callback);
+          }
+          return true;
+        };
+
+        passwordRl.on('close', () => {
+          stdout.write = oldWrite;
+        });
+      } else {
+        this.rl.question(isPiped ? '' : '> ', (answer) => {
+          // Validate answer
+          if (!answer && field.required) {
+            if (!isPiped) console.log(`❌ ${field.label} is required.`);
             resolve(this.askField(field));
             return;
           }
-        }
 
-        if (answer && field.maxLength && answer.length > field.maxLength) {
-          if (!isPiped) console.log(`❌ Too long! Maximum ${field.maxLength} characters.`);
-          resolve(this.askField(field));
-          return;
-        }
+          if (answer && field.validation) {
+            const validationResult = field.validation(answer);
+            if (validationResult !== true) {
+              if (!isPiped) console.log(`❌ ${validationResult}`);
+              resolve(this.askField(field));
+              return;
+            }
+          }
 
-        resolve(answer);
-      });
+          if (answer && field.maxLength && answer.length > field.maxLength) {
+            if (!isPiped) console.log(`❌ Too long! Maximum ${field.maxLength} characters.`);
+            resolve(this.askField(field));
+            return;
+          }
+
+          resolve(answer);
+        });
+      }
     });
   }
 

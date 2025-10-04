@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import * as os from 'os';
 import { SignupTemplate, PLATFORM_SIGNUP_REQUIREMENTS } from './signup-templates';
 
 export interface PersistedSignupData {
@@ -10,8 +11,9 @@ export interface PersistedSignupData {
   updatedAt: string;
 }
 
-// Default template configuration - loaded from .hyperpost-config.json
-const DEFAULT_CONFIG_FILE = '.hyperpost-config.json';
+// Default template configuration - loaded from config.json (or .hyperpost-config.json for backward compatibility)
+const DEFAULT_CONFIG_FILE = 'config.json';
+const LEGACY_CONFIG_FILE = '.hyperpost-config.json';
 
 interface HyperPostConfig {
   defaultTemplate: SignupTemplate;
@@ -36,12 +38,53 @@ export class SignupManager {
   private data: PersistedSignupData;
   private configPath: string;
   private config: HyperPostConfig;
+  private configDir: string;
 
   constructor() {
-    this.dataPath = path.join(process.cwd(), '.hyperpost-signup.json');
-    this.configPath = path.join(process.cwd(), DEFAULT_CONFIG_FILE);
+    this.configDir = this.getConfigDirectory();
+    this.dataPath = path.join(this.configDir, 'signup-data.json');
+    this.configPath = this.getConfigFilePath();
     this.loadData();
     this.loadConfig();
+  }
+
+  private getConfigFilePath(): string {
+    const newConfigPath = path.join(this.configDir, DEFAULT_CONFIG_FILE);
+    const legacyConfigPath = path.join(this.configDir, LEGACY_CONFIG_FILE);
+
+    // Use new config file if it exists, otherwise legacy, otherwise new
+    if (fs.existsSync(newConfigPath)) {
+      return newConfigPath;
+    } else if (fs.existsSync(legacyConfigPath)) {
+      return legacyConfigPath;
+    } else {
+      return newConfigPath;
+    }
+  }
+
+  /**
+   * Determine the appropriate config directory based on installation type
+   */
+  private getConfigDirectory(): string {
+    // Check if we're in a project directory (has package.json or node_modules)
+    const cwd = process.cwd();
+    const hasPackageJson = fs.existsSync(path.join(cwd, 'package.json'));
+    const hasNodeModules = fs.existsSync(path.join(cwd, 'node_modules'));
+
+    // If we're in a project directory, use current working directory for project-specific config
+    if (hasPackageJson || hasNodeModules) {
+      return cwd;
+    }
+
+    // For global CLI usage, use user config directory
+    const userConfigDir = path.join(os.homedir(), '.config', 'hyper-post');
+
+    // Create the directory if it doesn't exist
+    if (!fs.existsSync(userConfigDir)) {
+      fs.mkdirSync(userConfigDir, { recursive: true });
+    }
+
+    return userConfigDir;
   }
 
   private loadData(): void {
