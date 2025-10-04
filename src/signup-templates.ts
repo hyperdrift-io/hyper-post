@@ -63,6 +63,7 @@ export interface PlatformSignupRequirements {
     description: string;
     maxLength?: number;
     recommended?: boolean;
+    required?: boolean;
   }[];
 
   // Platform-specific signup instructions
@@ -184,7 +185,7 @@ export const PLATFORM_SIGNUP_REQUIREMENTS: Record<string, PlatformSignupRequirem
       '1. Complete your profile with bio, website, and images',
       '2. Go to Preferences → Development → New application',
       '3. Name: "HyperPost", Scopes: read + write',
-      '4. Copy the access token to your .env file'
+      '4. Copy the access token (the setup wizard will collect this)'
     ],
     verificationNotes: 'Mastodon accounts are verified through email confirmation. Some instances may require additional verification.'
   },
@@ -279,7 +280,7 @@ export const PLATFORM_SIGNUP_REQUIREMENTS: Record<string, PlatformSignupRequirem
       '2. Go to Settings → Privacy and security → App passwords',
       '3. Click "Add App Password"',
       '4. Name: "HyperPost"',
-      '5. Copy the generated app password to your .env file'
+      '5. Copy the generated app password (the setup wizard will collect this)'
     ],
     verificationNotes: 'Bluesky requires email verification. Accounts must be 16+ years old. App passwords are required for API access (not your main password).'
   },
@@ -343,8 +344,9 @@ export const PLATFORM_SIGNUP_REQUIREMENTS: Record<string, PlatformSignupRequirem
       '4. Click the "Generate API Key" button',
       '5. Enter a name like "HyperPost" and click generate',
       '6. Copy the generated API key immediately (it won\'t be shown again)',
-      '7. Add DEVTO_API_KEY=your_key_here to your .env file'
+      '7. Copy the API key (the setup wizard will collect this)'
     ],
+    setupSteps: [],
     verificationNotes: 'Dev.to API keys are available to all verified accounts. If you don\'t see the API Keys section, try refreshing the page or check if your account needs additional verification. API keys are generated instantly once the section is visible.'
   },
 
@@ -391,8 +393,9 @@ export const PLATFORM_SIGNUP_REQUIREMENTS: Record<string, PlatformSignupRequirem
       '2. Scroll down to "Integration tokens"',
       '3. Click "Get integration token"',
       '4. Name it "HyperPost" and create',
-      '5. Copy the token to your .env file as MEDIUM_TOKEN'
+      '5. Copy the integration token (the setup wizard will collect this)'
     ],
+    setupSteps: [],
     verificationNotes: 'Medium integration tokens are created instantly. Requires a Medium account.'
   }
 
@@ -485,7 +488,7 @@ export const DIFFICULT_PLATFORM_SIGNUP_REQUIREMENTS: Record<string, PlatformSign
       '3. Click "New Application"',
       '4. Name: "HyperPost Bot"',
       '5. Go to "Bot" section and click "Add Bot"',
-      '6. Copy the bot token to your .env file',
+      '6. Copy the bot token (the setup wizard will collect this)',
       '7. Get a channel ID from your server (right-click channel → Copy ID)'
     ],
     verificationNotes: 'Discord requires email verification and accounts must be 13+. Bot tokens are separate from user accounts and require a bot application. You need a server and channel to post to. Discord has rate limits on bot posting.'
@@ -589,7 +592,7 @@ export const DIFFICULT_PLATFORM_SIGNUP_REQUIREMENTS: Record<string, PlatformSign
       '3. Click "Create App" or "Create Another App"',
       '4. Type: "script", Name: "HyperPost", Description: "Multi-platform posting"',
       '5. Redirect URI: "http://localhost:8080"',
-      '6. Copy the client_id and secret to your .env file'
+      '6. Copy the client_id and secret (the setup wizard will collect this)'
     ],
     verificationNotes: 'Reddit requires email verification. You must create an app in preferences to get API credentials. Reddit has strict API rate limits and requires OAuth for posting. Network connectivity issues may prevent API access.'
   },

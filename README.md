@@ -248,7 +248,7 @@ HyperPost stands out from other social media automation tools:
 - **Signup templates saved** in config directory (`~/.config/hyper-post/` for global installs)
 - **Reuse branding** across multiple platforms
 - **Completed accounts tracked** persistently
-- **Automatic .env generation** from stored data
+- **Secure credential storage** in config directory
 - **Session continuity** - templates persist across runs
 
 ---
@@ -257,21 +257,17 @@ HyperPost stands out from other social media automation tools:
 
 ### Config File Locations
 
-HyperPost intelligently stores configuration based on your installation type:
+HyperPost stores all configuration securely in your user directory, regardless of where you run the CLI:
 
-#### Global CLI Installation (recommended)
-When installed globally (`pnpm add -g hyper-post`), configuration is stored in:
+#### User Configuration Directory
+Configuration is always stored in:
 - **`~/.config/hyper-post/signup-data.json`** - Your account credentials and signup templates
 - **`~/.config/hyper-post/config.json`** - Default template settings
 
-#### Project-Specific Installation
-When installed locally (`pnpm add hyper-post`), configuration is stored in your project directory:
-- **`.hyperpost-signup.json`** - Your account credentials and signup templates
-- **`.hyperpost-config.json`** - Default template settings
+This ensures consistent behavior whether you install globally or locally, and prevents accidentally committing sensitive credentials to version control.
 
 #### Configuration Priority
-1. **Environment Variables** (highest priority - for CI/CD, Docker, or temporary overrides)
-2. **Signup Manager** (persistent account data stored in config directory)
+1. **Signup Manager** (persistent account data stored in config directory)
 
 **No .env files needed!** All configuration is handled automatically by the setup wizard.
 
@@ -295,8 +291,7 @@ The setup wizard will:
 #### Mastodon
 1. Go to your Mastodon instance → Preferences → Development
 2. Create a new application
-3. Copy the access token
-4. Set `MASTODON_INSTANCE` to your instance domain (e.g., `mastodon.social`)
+3. Copy the access token (the setup wizard will guide you through this)
 
 #### Bluesky
 1. Go to [bsky.app](https://bsky.app) → Settings → Privacy and security → App passwords
@@ -350,19 +345,11 @@ hyper-post post -c "Content" -p "mastodon,bluesky,reddit"
 ### Programmatic Usage
 
 ```typescript
-import { HyperPost, SocialPost } from 'hyper-post';
+import { HyperPost, SocialPost, SignupManager } from 'hyper-post';
 
-// Load credentials from environment
-const credentials = {
-  mastodon: {
-    instance: process.env.MASTODON_INSTANCE!,
-    accessToken: process.env.MASTODON_ACCESS_TOKEN!
-  },
-  bluesky: {
-    identifier: process.env.BLUESKY_IDENTIFIER!,
-    password: process.env.BLUESKY_PASSWORD!
-  }
-};
+// Load credentials from signup manager
+const signupManager = new SignupManager();
+const credentials = signupManager.getAllCompletedAccounts();
 
 const hyperPost = new HyperPost(credentials);
 

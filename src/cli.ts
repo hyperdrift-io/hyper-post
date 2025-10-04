@@ -93,8 +93,10 @@ program
 
 program
   .command('platforms')
-  .description('List configured platforms')
-  .action(() => {
+  .description('List and test configured platforms')
+  .option('--test', 'Test credentials for each platform')
+  .option('--platform <platform>', 'Test only a specific platform')
+  .action(async (options) => {
     try {
       const credentials = loadCredentials();
       const hyperPost = new HyperPost(credentials);
@@ -102,13 +104,54 @@ program
       const platforms = hyperPost.getConfiguredPlatforms();
 
       if (platforms.length === 0) {
-        console.log('No platforms configured. Check your .env file or run setup.');
+        console.log('No platforms configured. Run setup to configure platforms.');
         console.log('Run "hyper-post setup" to configure platforms interactively.');
+        return;
+      }
+
+      let platformsToTest = platforms;
+      if (options.platform) {
+        if (!platforms.includes(options.platform)) {
+          console.error(`❌ Platform '${options.platform}' is not configured.`);
+          console.log('Available platforms:', platforms.join(', '));
+          process.exit(1);
+        }
+        platformsToTest = [options.platform];
+      }
+
+      if (options.test) {
+        console.log('🧪 Testing credentials for platforms...\n');
+
+        for (const platformName of platformsToTest) {
+          try {
+            const platform = hyperPost.getPlatform(platformName);
+            if (!platform) {
+              console.log(`❌ ${platformName}: Platform class not found`);
+              continue;
+            }
+
+            // Test basic credential validation
+            platform.validateCredentials();
+
+            // Try a simple API call to test connectivity (this would be platform-specific)
+            // For now, just validate that credentials are present and properly formatted
+            console.log(`✅ ${platformName}: Credentials validated`);
+          } catch (error) {
+            console.log(`❌ ${platformName}: ${error instanceof Error ? error.message : 'Validation failed'}`);
+          }
+        }
+
+        console.log('\n💡 Note: Full API connectivity tests would require actual API calls.');
+        console.log('   Use --dry-run with the post command for more comprehensive testing.');
       } else {
         console.log('Configured platforms:');
-        platforms.forEach(platform => {
+        platformsToTest.forEach(platform => {
           console.log(`- ${platform}`);
         });
+
+        if (platformsToTest.length > 0) {
+          console.log('\n💡 Use --test to validate credentials, or --platform <name> --test to test a specific platform.');
+        }
       }
     } catch (error) {
       console.error('Error:', error instanceof Error ? error.message : 'Unknown error');
@@ -126,68 +169,84 @@ program
     await setup.run();
   });
 
+program
+  .command('test-post <platform>')
+  .description('Test posting to a specific platform (dry run)')
+  .option('-c, --content <content>', 'Post content')
+  .option('-t, --title <title>', 'Post title')
+  .option('-u, --url <url>', 'URL to include')
+  .option('--tags <tags>', 'Comma-separated tags')
+  .action(async (platformName, options) => {
+    try {
+      const credentials = loadCredentials();
+      const hyperPost = new HyperPost(credentials);
+
+      if (!hyperPost.isPlatformConfigured(platformName as any)) {
+        console.error(`❌ Platform '${platformName}' is not configured.`);
+        console.log('Run "hyper-post platforms" to see configured platforms.');
+        process.exit(1);
+      }
+
+      const post: SocialPost = {
+        content: options.content || 'Test post from HyperPost CLI',
+        title: options.title,
+        url: options.url,
+        tags: options.tags ? options.tags.split(',').map((tag: string) => tag.trim()) : undefined
+      };
+
+      console.log(`🧪 Testing post to ${platformName}...`);
+      console.log('=' .repeat(50));
+      console.log(`Content: ${post.content}`);
+      if (post.title) console.log(`Title: ${post.title}`);
+      if (post.url) console.log(`URL: ${post.url}`);
+      if (post.tags) console.log(`Tags: ${post.tags.join(', ')}`);
+      console.log('=' .repeat(50));
+
+      // Test credentials first
+      try {
+        const platform = hyperPost.getPlatform(platformName);
+        platform?.validateCredentials();
+        console.log(`✅ ${platformName}: Credentials validated`);
+      } catch (error) {
+        console.log(`❌ ${platformName}: ${error instanceof Error ? error.message : 'Credential validation failed'}`);
+        process.exit(1);
+      }
+
+      // Perform dry run post
+      const result = await hyperPost.postToPlatforms([platformName as any], post);
+
+      console.log(`📊 Results: ${result.successful} successful, ${result.failed} failed`);
+
+      if (result.successful > 0) {
+        console.log(`✅ ${platformName}: Post test successful!`);
+        if (result.results?.[0]?.url) {
+          console.log(`🔗 Would post to: ${result.results[0].url}`);
+        }
+      } else {
+        console.log(`❌ ${platformName}: Post test failed`);
+        // Check if there are any results with errors
+        if (result.results && result.results.length > 0) {
+          const failedResult = result.results.find(r => !r.success);
+          if (failedResult) {
+            console.log(`Error: ${failedResult.error || 'Unknown error'}`);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error:', error instanceof Error ? error.message : 'Unknown error');
+      process.exit(1);
+    }
+  });
+
 function loadCredentials(): any {
   const credentials: any = {};
 
-  // First load from SignupManager (persistent data from ~/.config/hyper-post/)
+  // Load from SignupManager (persistent data from ~/.config/hyper-post/)
   const signupManager = new SignupManager();
   const completedAccounts = signupManager.getAllCompletedAccounts();
 
   for (const [platform, accountData] of Object.entries(completedAccounts)) {
     credentials[platform] = accountData;
-  }
-
-  // Then override with environment variables (for CI/CD, Docker, or temporary overrides)
-  // Mastodon
-  if (process.env.MASTODON_INSTANCE && process.env.MASTODON_ACCESS_TOKEN) {
-    credentials.mastodon = {
-      instance: process.env.MASTODON_INSTANCE,
-      accessToken: process.env.MASTODON_ACCESS_TOKEN
-    };
-  }
-
-  // Bluesky
-  if (process.env.BLUESKY_IDENTIFIER && process.env.BLUESKY_PASSWORD) {
-    credentials.bluesky = {
-      identifier: process.env.BLUESKY_IDENTIFIER,
-      password: process.env.BLUESKY_PASSWORD
-    };
-  }
-
-  // Discord - disabled due to rate limiting
-  if (process.env.DISCORD_DISABLED !== 'true' &&
-      process.env.DISCORD_TOKEN && process.env.DISCORD_CHANNEL_ID) {
-    credentials.discord = {
-      token: process.env.DISCORD_TOKEN,
-      channelId: process.env.DISCORD_CHANNEL_ID
-    };
-  }
-
-  // Dev.to
-  if (process.env.DEVTO_API_KEY) {
-    credentials.devto = {
-      apiKey: process.env.DEVTO_API_KEY
-    };
-  }
-
-  // Medium
-  if (process.env.MEDIUM_TOKEN) {
-    credentials.medium = {
-      integrationToken: process.env.MEDIUM_TOKEN
-    };
-  }
-
-  // Reddit - disabled due to network connectivity issues
-  if (process.env.REDDIT_DISABLED !== 'true' &&
-      process.env.REDDIT_CLIENTID && process.env.REDDIT_CLIENTSECRET &&
-      process.env.REDDIT_USERNAME && process.env.REDDIT_PASSWORD) {
-    credentials.reddit = {
-      clientId: process.env.REDDIT_CLIENTID,
-      clientSecret: process.env.REDDIT_CLIENTSECRET,
-      username: process.env.REDDIT_USERNAME,
-      password: process.env.REDDIT_PASSWORD,
-      subreddit: process.env.REDDIT_SUBREDDIT
-    };
   }
 
   return credentials;

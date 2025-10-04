@@ -11,8 +11,7 @@
   "files": [
     "dist",
     "schema.prisma",
-    "README.md",
-    "env.example"
+    "README.md"
   ],
   "scripts": {
     "build": "tsup",

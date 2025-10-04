@@ -30,24 +30,22 @@ const colors = {
 
 class HyperPostSetup {
   private rl: readline.Interface;
-  private envPath: string;
   private signupManager: SignupManager;
   private isRunning: boolean = false;
 
   constructor() {
     // Create readline interface with proper configuration for both interactive and piped input
-    const isPiped = !process.stdin.isTTY || process.env.CI;
+    const isPiped = !process.stdin.isTTY || process.env.CI === 'true';
     this.rl = readline.createInterface({
       input: process.stdin,
-      output: isPiped ? null : process.stdout,
+      output: isPiped ? undefined : process.stdout,
       terminal: !isPiped
     });
-    this.envPath = path.join(process.cwd(), '.env');
     this.signupManager = new SignupManager();
   }
 
   private isPipedInput(): boolean {
-    return !process.stdin.isTTY || process.env.CI;
+    return !process.stdin.isTTY || process.env.CI === 'true';
   }
 
   private printHeader(): void {
@@ -68,17 +66,15 @@ class HyperPostSetup {
 
     this.printHeader();
 
-    // Check if .env already exists and show current status
-    if (fs.existsSync(this.envPath)) {
-      console.log(`${colors.blue}📁 Existing Configuration Found:${colors.reset}`);
-      const existingPlatforms = this.signupManager.getConfiguredPlatforms();
-      if (existingPlatforms.length > 0) {
-        console.log(`${colors.green}Currently configured platforms:${colors.reset}`, existingPlatforms.join(', '));
-      } else {
-        console.log(`${colors.yellow}No platforms currently configured.${colors.reset}`);
-      }
-      console.log(`${colors.dim}New platform credentials will be added to existing configuration.${colors.reset}\n`);
+    // Show current status from signup manager
+    console.log(`${colors.blue}📁 Configuration Status:${colors.reset}`);
+    const existingPlatforms = this.signupManager.getConfiguredPlatforms();
+    if (existingPlatforms.length > 0) {
+      console.log(`${colors.green}Currently configured platforms:${colors.reset}`, existingPlatforms.join(', '));
+    } else {
+      console.log(`${colors.yellow}No platforms currently configured.${colors.reset}`);
     }
+    console.log(`${colors.dim}New platform credentials will be added to your configuration.${colors.reset}\n`);
 
     // Check for quick setup mode
     const quickSetup = process.argv.includes('--quick') || process.argv.includes('-q');
@@ -99,12 +95,30 @@ class HyperPostSetup {
       await this.createPlatformAccount(platform);
     }
 
-    // Generate final .env file
-    await this.generateEnvFile();
-
     console.log(`\n${colors.bright}${colors.green}🎉 ALL ACCOUNTS CREATED AND CONFIGURED!${colors.reset}`);
     console.log(`${colors.cyan}You can now post to all platforms with:${colors.reset}`);
     console.log(`${colors.yellow}hyper-post post -c "Your message" -t "Title" -u "https://link.com"${colors.reset}`);
+
+    this.rl.close();
+    this.isRunning = false;
+  }
+
+  private async quickSetup(): Promise<void> {
+    console.log(`${colors.yellow}⚡ QUICK SETUP MODE${colors.reset}`);
+    console.log(`${colors.dim}═══════════════════${colors.reset}`);
+    console.log(`${colors.cyan}This mode will use default values and skip most prompts.${colors.reset}\n`);
+
+    // Set up database with SQLite by default
+    await this.setupSQLite();
+
+    // Create default signup template
+    const defaultTemplate = this.signupManager.getDefaultTemplate();
+    Object.keys(ALL_PLATFORM_SIGNUP_REQUIREMENTS).forEach(platform => {
+      this.signupManager.saveTemplate(platform, defaultTemplate);
+    });
+
+    console.log(`${colors.green}✅ Quick setup complete!${colors.reset}`);
+    console.log(`${colors.cyan}You can now configure individual platforms manually.${colors.reset}`);
 
     this.rl.close();
     this.isRunning = false;
@@ -125,7 +139,14 @@ class HyperPostSetup {
 
       const reuse = await this.askYesNo('\nReuse existing template for new platforms?');
       if (reuse) {
-        console.log(`${colors.green}✅ Using existing template.${colors.reset}\n`);
+        // Copy existing template to platforms that don't have templates yet
+        const baseTemplate = Object.values(existingTemplates)[0]; // Use first existing template as base
+        Object.keys(ALL_PLATFORM_SIGNUP_REQUIREMENTS).forEach(platform => {
+          if (!existingTemplates[platform]) {
+            this.signupManager.saveTemplate(platform, baseTemplate);
+          }
+        });
+        console.log(`${colors.green}✅ Using existing template for all platforms.${colors.reset}\n`);
         return;
       }
       console.log(`${colors.yellow}📝 Creating new template.${colors.reset}\n`);
@@ -332,54 +353,22 @@ class HyperPostSetup {
       }
     }
 
-    // Ask for PostgreSQL connection details
-    console.log(`${colors.cyan}PostgreSQL connection details:${colors.reset}`);
+    // Ask for full DATABASE_URL directly
+    console.log(`${colors.cyan}DATABASE_URL format:${colors.reset}`);
+    console.log(`${colors.dim}postgresql://username:password@host:port/database${colors.reset}`);
+    const currentUser = process.env.USER || 'postgres';
+    console.log(`${colors.dim}Example: postgresql://[${currentUser}]@localhost:5432/hyper-post${colors.reset}`);
+    console.log('');
 
-    const host = await this.askFieldWithDefault({
-      key: 'host',
-      label: 'Host',
-      description: 'PostgreSQL server host (e.g., localhost, db.example.com)',
+    const dbUrl = await this.askFieldWithDefault({
+      key: 'database_url',
+      label: 'DATABASE_URL',
+      description: 'Full PostgreSQL connection URL',
       type: 'text',
       required: true,
-      defaultValue: 'localhost'
+      defaultValue: `postgresql://${currentUser}:password@localhost:5432/hyperpost`
     });
 
-    const port = await this.askFieldWithDefault({
-      key: 'port',
-      label: 'Port',
-      description: 'PostgreSQL server port',
-      type: 'text',
-      required: true,
-      defaultValue: '5432'
-    });
-
-    const database = await this.askFieldWithDefault({
-      key: 'database',
-      label: 'Database Name',
-      description: 'PostgreSQL database name',
-      type: 'text',
-      required: true,
-      defaultValue: 'hyperpost'
-    });
-
-    const username = await this.askFieldWithDefault({
-      key: 'username',
-      label: 'Username',
-      description: 'PostgreSQL username',
-      type: 'text',
-      required: true,
-      defaultValue: process.env.USER || 'postgres'
-    });
-
-    const password = await this.askField({
-      key: 'password',
-      label: 'Password',
-      description: 'PostgreSQL password',
-      type: 'password',
-      required: true
-    });
-
-    const dbUrl = `postgresql://${username}:${password}@${host}:${port}/${database}`;
     await this.setupPostgreSQLWithUrl(dbUrl);
   }
 
@@ -410,14 +399,6 @@ class HyperPostSetup {
       // Generate Prisma client and create database
       await this.runPrismaCommands();
 
-      // Save DATABASE_URL to .env if we're in project mode
-      const signupManager = new SignupManager();
-      const configDir = signupManager['configDir'];
-      if (configDir === process.cwd()) {
-        // Project mode - save to .env
-        this.saveEnvVariable('DATABASE_URL', dbUrl);
-      }
-
     } catch (error) {
       console.log(`${colors.yellow}⚠️  PostgreSQL setup completed with warnings. You may need to run 'pnpm db:generate && pnpm db:push' manually.${colors.reset}`);
       console.log(`${colors.dim}Make sure your PostgreSQL server is running and accessible.${colors.reset}`);
@@ -442,27 +423,6 @@ class HyperPostSetup {
     }
   }
 
-  private saveEnvVariable(key: string, value: string): void {
-    const envPath = path.join(process.cwd(), '.env');
-    let envContent = '';
-
-    // Read existing .env if it exists
-    if (fs.existsSync(envPath)) {
-      envContent = fs.readFileSync(envPath, 'utf8');
-    }
-
-    // Add or update the variable
-    const lines = envContent.split('\n').filter(line => line.trim());
-    const existingIndex = lines.findIndex(line => line.startsWith(`${key}=`));
-
-    if (existingIndex >= 0) {
-      lines[existingIndex] = `${key}=${value}`;
-    } else {
-      lines.push(`${key}=${value}`);
-    }
-
-    fs.writeFileSync(envPath, lines.join('\n') + '\n', 'utf8');
-  }
 
   private async selectPlatforms(): Promise<string[]> {
     console.log(`${colors.bright}${colors.blue}🎯 SELECT PLATFORMS TO SET UP${colors.reset}`);
@@ -602,7 +562,7 @@ class HyperPostSetup {
           terminal: true
         });
 
-        passwordRl.question('> ', (answer) => {
+        passwordRl.question('> ', (answer: string) => {
           passwordRl.close();
           resolve(answer);
         });
@@ -718,96 +678,6 @@ class HyperPostSetup {
     });
   }
 
-  private async generateEnvFile(): Promise<void> {
-    const newEnvContent = this.signupManager.exportToEnv();
-
-    // Read existing .env content if it exists
-    let existingContent = '';
-    if (fs.existsSync(this.envPath)) {
-      existingContent = fs.readFileSync(this.envPath, 'utf8');
-    }
-
-    // Merge new content with existing content
-    const mergedContent = this.mergeEnvContent(existingContent, newEnvContent);
-
-    fs.writeFileSync(this.envPath, mergedContent);
-    console.log(`📄 Updated .env file at ${this.envPath} (added new platform credentials)`);
-  }
-
-  private mergeEnvContent(existing: string, newContent: string): string {
-    const existingLines = existing.split('\n').filter(line => line.trim());
-    const newLines = newContent.split('\n').filter(line => line.trim());
-
-    // Create a map of existing environment variables
-    const existingVars = new Map<string, string>();
-    const existingComments: string[] = [];
-
-    for (const line of existingLines) {
-      if (line.startsWith('#')) {
-        existingComments.push(line);
-      } else if (line.includes('=')) {
-        const [key, ...valueParts] = line.split('=');
-        existingVars.set(key.trim(), valueParts.join('=').trim());
-      }
-    }
-
-    // Merge new variables (new ones override existing ones for the same platform)
-    for (const line of newLines) {
-      if (!line.startsWith('#') && line.includes('=')) {
-        const [key, ...valueParts] = line.split('=');
-        existingVars.set(key.trim(), valueParts.join('=').trim());
-      }
-    }
-
-    // Reconstruct the file with comments at the top, then all variables
-    const result: string[] = [];
-
-    // Add header comment
-    result.push('# HyperPost Configuration');
-    result.push('# Generated and updated by setup wizard');
-    result.push('# Genuine accounts with complete profiles');
-    result.push('');
-
-    // Group variables by platform
-    const platformGroups: Record<string, string[]> = {};
-    const otherVars: string[] = [];
-
-    for (const [key, value] of existingVars) {
-      const platformMatch = key.match(/^([A-Z]+)_/);
-      if (platformMatch) {
-        const platform = platformMatch[1].toLowerCase();
-        if (!platformGroups[platform]) {
-          platformGroups[platform] = [];
-        }
-        platformGroups[platform].push(`${key}=${value}`);
-      } else {
-        otherVars.push(`${key}=${value}`);
-      }
-    }
-
-    // Add platform sections
-    const platformOrder = ['mastodon', 'bluesky', 'reddit', 'discord'];
-    for (const platform of platformOrder) {
-      if (platformGroups[platform]) {
-        result.push(`# ========================================`);
-        result.push(`# ${platform.toUpperCase()}`);
-        result.push(`# ========================================`);
-        result.push(...platformGroups[platform]);
-        result.push('');
-      }
-    }
-
-    // Add any remaining variables
-    if (otherVars.length > 0) {
-      result.push('# ========================================');
-      result.push('# OTHER SETTINGS');
-      result.push('# ========================================');
-      result.push(...otherVars);
-      result.push('');
-    }
-
-    return result.join('\n');
-  }
 }
 
 export { HyperPostSetup };
