@@ -704,14 +704,16 @@ var init_signup_templates = __esm({
 });
 
 // src/signup-manager.ts
-var fs, path, DEFAULT_CONFIG_FILE, FALLBACK_DEFAULT_TEMPLATE, SignupManager;
+var fs, path, os, DEFAULT_CONFIG_FILE, LEGACY_CONFIG_FILE, FALLBACK_DEFAULT_TEMPLATE, SignupManager;
 var init_signup_manager = __esm({
   "src/signup-manager.ts"() {
     "use strict";
     fs = __toESM(require("fs"));
     path = __toESM(require("path"));
+    os = __toESM(require("os"));
     init_signup_templates();
-    DEFAULT_CONFIG_FILE = ".hyperpost-config.json";
+    DEFAULT_CONFIG_FILE = "config.json";
+    LEGACY_CONFIG_FILE = ".hyperpost-config.json";
     FALLBACK_DEFAULT_TEMPLATE = {
       username: "hyperdrift",
       displayName: "HyperDrift",
@@ -729,11 +731,40 @@ var init_signup_manager = __esm({
       data;
       configPath;
       config;
+      configDir;
       constructor() {
-        this.dataPath = path.join(process.cwd(), ".hyperpost-signup.json");
-        this.configPath = path.join(process.cwd(), DEFAULT_CONFIG_FILE);
+        this.configDir = this.getConfigDirectory();
+        this.dataPath = path.join(this.configDir, "signup-data.json");
+        this.configPath = this.getConfigFilePath();
         this.loadData();
         this.loadConfig();
+      }
+      getConfigFilePath() {
+        const newConfigPath = path.join(this.configDir, DEFAULT_CONFIG_FILE);
+        const legacyConfigPath = path.join(this.configDir, LEGACY_CONFIG_FILE);
+        if (fs.existsSync(newConfigPath)) {
+          return newConfigPath;
+        } else if (fs.existsSync(legacyConfigPath)) {
+          return legacyConfigPath;
+        } else {
+          return newConfigPath;
+        }
+      }
+      /**
+       * Determine the appropriate config directory based on installation type
+       */
+      getConfigDirectory() {
+        const cwd = process.cwd();
+        const hasPackageJson = fs.existsSync(path.join(cwd, "package.json"));
+        const hasNodeModules = fs.existsSync(path.join(cwd, "node_modules"));
+        if (hasPackageJson || hasNodeModules) {
+          return cwd;
+        }
+        const userConfigDir = path.join(os.homedir(), ".config", "hyper-post");
+        if (!fs.existsSync(userConfigDir)) {
+          fs.mkdirSync(userConfigDir, { recursive: true });
+        }
+        return userConfigDir;
       }
       loadData() {
         try {
@@ -977,6 +1008,7 @@ var init_setup = __esm({
           await this.quickSetup();
           return;
         }
+        const dbChoice = await this.selectDatabase();
         await this.createSignupTemplates();
         const platforms = await this.selectPlatforms();
         for (const platform of platforms) {
@@ -1088,6 +1120,38 @@ ${colors.cyan}\u{1F4CB} Profile Information (consistent across platforms):${colo
         console.log(`${colors.green}\u2705 Signup templates created and saved!${colors.reset}
 `);
       }
+      async selectDatabase() {
+        console.log(`${colors.bright}${colors.blue}\u{1F5C4}\uFE0F  DATABASE SETUP${colors.reset}`);
+        console.log(`${colors.dim}\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550${colors.reset}`);
+        console.log(`${colors.cyan}Choose your database:${colors.reset}`);
+        console.log(`${colors.green}1.${colors.reset} SQLite (Recommended) - Simple, no setup required`);
+        console.log(`${colors.yellow}2.${colors.reset} PostgreSQL - Advanced, requires PostgreSQL server`);
+        console.log("");
+        const hasExistingSchema = fs2.existsSync(path2.join(process.cwd(), "schema.prisma"));
+        if (hasExistingSchema) {
+          console.log(`${colors.blue}\u{1F4C1} Existing database schema found. We'll update it with your choice.${colors.reset}`);
+          console.log("");
+        }
+        while (true) {
+          const choice = await this.askField({
+            key: "database",
+            label: "Database Choice (1-2)",
+            description: "Choose database type",
+            type: "text",
+            required: true
+          });
+          switch (choice) {
+            case "1":
+              await this.setupSQLite();
+              return "sqlite";
+            case "2":
+              await this.setupPostgreSQL();
+              return "postgresql";
+            default:
+              console.log(`${colors.red}\u274C Please choose 1 or 2.${colors.reset}`);
+          }
+        }
+      }
       async selectAccountType() {
         console.log(`${colors.cyan}What type of account is this?${colors.reset}`);
         console.log(`${colors.yellow}1.${colors.reset} Personal - Individual developer/streamer`);
@@ -1115,6 +1179,135 @@ ${colors.cyan}\u{1F4CB} Profile Information (consistent across platforms):${colo
               console.log(`${colors.red}\u274C Please choose 1, 2, 3, or 4.${colors.reset}`);
           }
         }
+      }
+      async setupSQLite() {
+        console.log(`${colors.green}\u{1F4E6} Setting up SQLite database...${colors.reset}`);
+        try {
+          const schemaPath = path2.join(process.cwd(), "schema.prisma");
+          let schemaContent = fs2.readFileSync(schemaPath, "utf8");
+          schemaContent = schemaContent.replace(
+            /datasource db \{\s*provider = "postgresql"/,
+            'datasource db {\n  provider = "sqlite"'
+          );
+          schemaContent = schemaContent.replace(
+            /url\s*=\s*env\("DATABASE_URL"\)/,
+            'url = "file:./hyperpost.db"'
+          );
+          fs2.writeFileSync(schemaPath, schemaContent, "utf8");
+          console.log(`${colors.green}\u2705 Updated schema.prisma for SQLite${colors.reset}`);
+          await this.runPrismaCommands();
+        } catch (error) {
+          console.log(`${colors.yellow}\u26A0\uFE0F  SQLite setup completed with warnings. You may need to run 'pnpm db:generate && pnpm db:push' manually.${colors.reset}`);
+        }
+      }
+      async setupPostgreSQL() {
+        console.log(`${colors.yellow}\u{1F418} Setting up PostgreSQL database...${colors.reset}`);
+        const existingDbUrl = process.env.DATABASE_URL;
+        if (existingDbUrl) {
+          console.log(`${colors.blue}\u{1F4CB} Found existing DATABASE_URL environment variable${colors.reset}`);
+          const useExisting = await this.askYesNo("Use existing DATABASE_URL?");
+          if (useExisting) {
+            await this.setupPostgreSQLWithUrl(existingDbUrl);
+            return;
+          }
+        }
+        console.log(`${colors.cyan}PostgreSQL connection details:${colors.reset}`);
+        const host = await this.askFieldWithDefault({
+          key: "host",
+          label: "Host",
+          description: "PostgreSQL server host (e.g., localhost, db.example.com)",
+          type: "text",
+          required: true,
+          defaultValue: "localhost"
+        });
+        const port = await this.askFieldWithDefault({
+          key: "port",
+          label: "Port",
+          description: "PostgreSQL server port",
+          type: "text",
+          required: true,
+          defaultValue: "5432"
+        });
+        const database = await this.askFieldWithDefault({
+          key: "database",
+          label: "Database Name",
+          description: "PostgreSQL database name",
+          type: "text",
+          required: true,
+          defaultValue: "hyperpost"
+        });
+        const username = await this.askFieldWithDefault({
+          key: "username",
+          label: "Username",
+          description: "PostgreSQL username",
+          type: "text",
+          required: true,
+          defaultValue: process.env.USER || "postgres"
+        });
+        const password = await this.askField({
+          key: "password",
+          label: "Password",
+          description: "PostgreSQL password",
+          type: "password",
+          required: true
+        });
+        const dbUrl = `postgresql://${username}:${password}@${host}:${port}/${database}`;
+        await this.setupPostgreSQLWithUrl(dbUrl);
+      }
+      async setupPostgreSQLWithUrl(dbUrl) {
+        try {
+          const schemaPath = path2.join(process.cwd(), "schema.prisma");
+          let schemaContent = fs2.readFileSync(schemaPath, "utf8");
+          schemaContent = schemaContent.replace(
+            /datasource db \{\s*provider = "[^"]*"/,
+            'datasource db {\n  provider = "postgresql"'
+          );
+          schemaContent = schemaContent.replace(
+            /url\s*=\s*"[^"]*"/,
+            `url = env("DATABASE_URL")`
+          );
+          fs2.writeFileSync(schemaPath, schemaContent, "utf8");
+          console.log(`${colors.green}\u2705 Updated schema.prisma for PostgreSQL${colors.reset}`);
+          process.env.DATABASE_URL = dbUrl;
+          await this.runPrismaCommands();
+          const signupManager = new SignupManager();
+          const configDir = signupManager["configDir"];
+          if (configDir === process.cwd()) {
+            this.saveEnvVariable("DATABASE_URL", dbUrl);
+          }
+        } catch (error) {
+          console.log(`${colors.yellow}\u26A0\uFE0F  PostgreSQL setup completed with warnings. You may need to run 'pnpm db:generate && pnpm db:push' manually.${colors.reset}`);
+          console.log(`${colors.dim}Make sure your PostgreSQL server is running and accessible.${colors.reset}`);
+        }
+      }
+      async runPrismaCommands() {
+        const { execSync } = require("child_process");
+        try {
+          console.log(`${colors.blue}\u{1F504} Generating Prisma client...${colors.reset}`);
+          execSync("npx prisma generate", { stdio: "inherit" });
+          console.log(`${colors.blue}\u{1F4E6} Setting up database schema...${colors.reset}`);
+          execSync("npx prisma db push", { stdio: "inherit" });
+          console.log(`${colors.green}\u2705 Database setup complete!${colors.reset}`);
+        } catch (error) {
+          console.log(`${colors.yellow}\u26A0\uFE0F  Prisma commands failed. You may need to run them manually:${colors.reset}`);
+          console.log(`${colors.dim}  pnpm db:generate && pnpm db:push${colors.reset}`);
+          throw error;
+        }
+      }
+      saveEnvVariable(key, value) {
+        const envPath = path2.join(process.cwd(), ".env");
+        let envContent = "";
+        if (fs2.existsSync(envPath)) {
+          envContent = fs2.readFileSync(envPath, "utf8");
+        }
+        const lines = envContent.split("\n").filter((line) => line.trim());
+        const existingIndex = lines.findIndex((line) => line.startsWith(`${key}=`));
+        if (existingIndex >= 0) {
+          lines[existingIndex] = `${key}=${value}`;
+        } else {
+          lines.push(`${key}=${value}`);
+        }
+        fs2.writeFileSync(envPath, lines.join("\n") + "\n", "utf8");
       }
       async selectPlatforms() {
         console.log(`${colors.bright}${colors.blue}\u{1F3AF} SELECT PLATFORMS TO SET UP${colors.reset}`);
@@ -1214,7 +1407,7 @@ ${colors.green}\u2705 Selected platforms: ${selectedPlatforms.join(", ")}${color
         return new Promise((resolve) => {
           const isPiped = this.isPipedInput();
           if (!isPiped) {
-            const prompt = field.sensitive ? "(hidden) " : "";
+            const prompt = field.sensitive || field.type === "password" ? "(hidden) " : "";
             const maxNote = field.maxLength ? ` (max ${field.maxLength} chars)` : "";
             const requiredNote = field.required ? " *" : "";
             console.log(`
@@ -1226,30 +1419,63 @@ ${field.label}${requiredNote}${maxNote}`);
               console.log(`   Options: ${field.options.join(", ")}`);
             }
           }
-          this.rl.question(isPiped ? "" : "> ", (answer) => {
-            if (!answer && field.required) {
-              if (!isPiped)
-                console.log(`\u274C ${field.label} is required.`);
-              resolve(this.askField(field));
-              return;
-            }
-            if (answer && field.validation) {
-              const validationResult = field.validation(answer);
-              if (validationResult !== true) {
+          if (field.type === "password" && !isPiped) {
+            const { createInterface: createInterface2 } = require("readline");
+            const passwordRl = createInterface2({
+              input: process.stdin,
+              output: process.stdout,
+              terminal: true
+            });
+            passwordRl.question("> ", (answer) => {
+              passwordRl.close();
+              resolve(answer);
+            });
+            const stdout = process.stdout;
+            let muted = false;
+            const oldWrite = stdout.write;
+            stdout.write = function(chunk, encoding, callback) {
+              if (!muted && chunk === "> ") {
+                muted = true;
+                oldWrite.call(this, chunk, encoding, callback);
+              } else if (muted && chunk === "\n") {
+                muted = false;
+                oldWrite.call(this, chunk, encoding, callback);
+              } else if (muted) {
+                oldWrite.call(this, "*", encoding, callback);
+              } else {
+                oldWrite.call(this, chunk, encoding, callback);
+              }
+              return true;
+            };
+            passwordRl.on("close", () => {
+              stdout.write = oldWrite;
+            });
+          } else {
+            this.rl.question(isPiped ? "" : "> ", (answer) => {
+              if (!answer && field.required) {
                 if (!isPiped)
-                  console.log(`\u274C ${validationResult}`);
+                  console.log(`\u274C ${field.label} is required.`);
                 resolve(this.askField(field));
                 return;
               }
-            }
-            if (answer && field.maxLength && answer.length > field.maxLength) {
-              if (!isPiped)
-                console.log(`\u274C Too long! Maximum ${field.maxLength} characters.`);
-              resolve(this.askField(field));
-              return;
-            }
-            resolve(answer);
-          });
+              if (answer && field.validation) {
+                const validationResult = field.validation(answer);
+                if (validationResult !== true) {
+                  if (!isPiped)
+                    console.log(`\u274C ${validationResult}`);
+                  resolve(this.askField(field));
+                  return;
+                }
+              }
+              if (answer && field.maxLength && answer.length > field.maxLength) {
+                if (!isPiped)
+                  console.log(`\u274C Too long! Maximum ${field.maxLength} characters.`);
+                resolve(this.askField(field));
+                return;
+              }
+              resolve(answer);
+            });
+          }
         });
       }
       async askFieldWithDefault(field) {
@@ -1377,7 +1603,6 @@ ${colors.bright}${field.label}${colors.reset}${defaultNote}${requiredNote}${maxN
 
 // src/cli.ts
 var import_commander = require("commander");
-var import_dotenv = require("dotenv");
 
 // src/platforms/BasePlatform.ts
 var BasePlatform = class {
@@ -2595,7 +2820,6 @@ var HyperPost = class {
 init_signup_manager();
 init_database();
 var crypto2 = __toESM(require("crypto"));
-(0, import_dotenv.config)();
 var program = new import_commander.Command();
 program.name("hyper-post").description("A unified social media posting tool for underground platforms").version("0.1.0");
 program.command("post").description("Post content to social media platforms").requiredOption("-c, --content <content>", "Post content").option("-t, --title <title>", "Post title").option("-u, --url <url>", "URL to include").option("--tags <tags>", "Comma-separated tags").option("-p, --platforms <platforms>", "Comma-separated list of platforms (defaults to all configured)").option("--dry-run", "Preview the post without actually posting (recommended for testing)").action(async (options) => {

@@ -99,22 +99,23 @@ yarn add file:/path/to/hyper-post
 
 ## Quick Start
 
-### Option 1: Comprehensive Setup (Recommended)
+### Setup (Required - Do This First!)
 Use the guided account creation wizard that helps you create genuine social media accounts with complete profiles:
 
 ```bash
-# (Optional) Customize default template values in .hyperpost-config.json
+# (Optional) For global installs, customize default template values in ~/.config/hyper-post/config.json
 # The wizard will use these as prefilled defaults
 
 # Run the comprehensive setup wizard
 hyper-post setup
 
 # This will:
-# 1. Create consistent branding templates (saved persistently)
-# 2. Guide you through account creation on each platform
-# 3. Help you set up complete profiles (bio, website, images, etc.)
-# 4. Generate API credentials automatically
-# 5. Save everything to .env and .hyperpost-signup.json
+# 1. Set up your database (SQLite recommended, PostgreSQL optional)
+# 2. Create consistent branding templates (saved persistently)
+# 3. Guide you through account creation on each platform
+# 4. Help you set up complete profiles (bio, website, images, etc.)
+# 5. Generate API credentials automatically
+# 6. Save everything securely in your config directory
 
 # Templates persist across sessions - reuse branding on new platforms!
 # Run setup again to add more platforms using existing templates
@@ -151,27 +152,27 @@ hyper-post history --platform mastodon
 hyper-post history --clear
 ```
 
-### 🗄️ **PostgreSQL Database**
-HyperPost uses PostgreSQL for robust post tracking, deduplication, and analytics:
+### 🗄️ **Database Support**
+HyperPost supports both SQLite (recommended) and PostgreSQL:
+
+**SQLite (Default - No Setup Required):**
+- File-based database (`hyperpost.db`)
+- Zero configuration
+- Perfect for individual users
+- Automatically set up by the setup wizard
+
+**PostgreSQL (Advanced):**
+- Robust multi-user support
+- Better for teams/organizations
+- Requires PostgreSQL server
+- Configurable during setup
 
 ```bash
-# Set up PostgreSQL database
-createdb hyperpost
-
-# Generate Prisma client
-pnpm db:generate
-
-# Create/update database schema
-pnpm db:push
-
-# View database in browser
-pnpm db:studio
-
-# Create migrations (production)
-pnpm db:migrate
-
-# Run database seeds (optional)
-pnpm db:seed
+# Database commands (run after setup)
+pnpm db:generate    # Generate Prisma client
+pnpm db:push        # Create/update database schema
+pnpm db:studio      # View database in browser
+pnpm db:migrate     # Create migrations (production)
 ```
 
 ### ⚙️ **Persistent Configuration**
@@ -196,28 +197,28 @@ hyper-post analytics --days 7
 hyper-post history --limit 100
 ```
 
-### Option 2: Manual Configuration
-1. **Set up your credentials** in a `.env` file:
+### Advanced: Environment Variable Configuration
+
+For CI/CD, Docker, or custom setups, you can override stored credentials with environment variables:
 
 ```bash
-# Copy the example
-cp .env.example .env
+# Mastodon
+export MASTODON_INSTANCE=your-instance.social
+export MASTODON_ACCESS_TOKEN=your_access_token
 
-# Edit with your credentials
-nano .env
+# Bluesky
+export BLUESKY_IDENTIFIER=your-handle.bsky.social
+export BLUESKY_PASSWORD=your_app_password
+
+# Discord
+export DISCORD_TOKEN=your_bot_token
+export DISCORD_CHANNEL_ID=your_channel_id
+
+# Then run commands
+hyper-post post -c "Hello from HyperPost! 🚀"
 ```
 
-2. **Post to all configured platforms**:
-
-```bash
-hyper-post post -c "Hello from HyperPost! 🚀" -t "My First Post" -u "https://hyperdrift.io"
-```
-
-3. **Post to specific platforms**:
-
-```bash
-hyper-post post -c "Tech update!" -p "mastodon,bluesky,reddit"
-```
+**Note**: Environment variables override any stored credentials from the setup wizard.
 
 ---
 
@@ -244,7 +245,7 @@ HyperPost stands out from other social media automation tools:
 - **Rate limiting awareness** and automatic retries
 
 ### 💾 **Persistent Data Management**
-- **Signup templates saved** in `.hyperpost-signup.json`
+- **Signup templates saved** in config directory (`~/.config/hyper-post/` for global installs)
 - **Reuse branding** across multiple platforms
 - **Completed accounts tracked** persistently
 - **Automatic .env generation** from stored data
@@ -256,35 +257,38 @@ HyperPost stands out from other social media automation tools:
 
 ### Config File Locations
 
-HyperPost stores configuration in the following locations (in order of precedence):
+HyperPost intelligently stores configuration based on your installation type:
 
-1. **Environment Variables** (highest priority)
-2. **`.env` file** in current directory
-3. **Signup Manager** (`.hyperpost-signup.json` and `.hyperpost-config.json`)
+#### Global CLI Installation (recommended)
+When installed globally (`pnpm add -g hyper-post`), configuration is stored in:
+- **`~/.config/hyper-post/signup-data.json`** - Your account credentials and signup templates
+- **`~/.config/hyper-post/config.json`** - Default template settings
 
-### Creating Configuration
+#### Project-Specific Installation
+When installed locally (`pnpm add hyper-post`), configuration is stored in your project directory:
+- **`.hyperpost-signup.json`** - Your account credentials and signup templates
+- **`.hyperpost-config.json`** - Default template settings
 
-Create a `.env` file in your project root with your social media credentials:
+#### Configuration Priority
+1. **Environment Variables** (highest priority - for CI/CD, Docker, or temporary overrides)
+2. **Signup Manager** (persistent account data stored in config directory)
+
+**No .env files needed!** All configuration is handled automatically by the setup wizard.
+
+### Setup Process
+
+**No manual configuration needed!** Use the interactive setup wizard:
 
 ```bash
-# Mastodon
-MASTODON_INSTANCE=your-instance.social
-MASTODON_ACCESS_TOKEN=your_access_token_here
-
-# Bluesky
-BLUESKY_IDENTIFIER=your-handle.bsky.social
-BLUESKY_PASSWORD=your_app_password
-
-# Discord
-DISCORD_TOKEN=your_bot_token
-DISCORD_CHANNEL_ID=your_channel_id
-
-# Future platforms...
-# REDDIT_CLIENT_ID=your_client_id
-# REDDIT_CLIENT_SECRET=your_client_secret
-# REDDIT_USERNAME=your_username
-# REDDIT_PASSWORD=your_password
+# Run the setup wizard - it handles everything automatically
+hyper-post setup
 ```
+
+The setup wizard will:
+- Guide you through account creation on each platform
+- Generate API credentials automatically
+- Store everything securely in your config directory
+- Create consistent branding templates across platforms
 
 ### Getting Platform Credentials
 
