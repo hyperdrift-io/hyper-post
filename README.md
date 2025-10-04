@@ -39,6 +39,21 @@ Part of the **HyperDrift** ecosystem: open-source tools for raw potential and in
 
 ## Installation
 
+### Local Development (Recommended for Contributors)
+
+Use pnpm to link the package locally for development:
+
+```bash
+# Navigate to the hyper-post directory
+cd /path/to/hyper-post
+
+# Link the package globally
+pnpm link
+
+# In your target project directory
+pnpm link hyper-post
+```
+
 ### As a global CLI tool
 
 ```bash
@@ -63,6 +78,21 @@ npm install hyper-post
 
 # Or with yarn
 yarn add hyper-post
+```
+
+### Local Path Installation
+
+Install directly from a local directory:
+
+```bash
+# Install from local path
+pnpm add file:/path/to/hyper-post
+
+# Or with npm
+npm install /path/to/hyper-post
+
+# Or with yarn
+yarn add file:/path/to/hyper-post
 ```
 
 ---
@@ -224,6 +254,16 @@ HyperPost stands out from other social media automation tools:
 
 ## Configuration
 
+### Config File Locations
+
+HyperPost stores configuration in the following locations (in order of precedence):
+
+1. **Environment Variables** (highest priority)
+2. **`.env` file** in current directory
+3. **Signup Manager** (`.hyperpost-signup.json` and `.hyperpost-config.json`)
+
+### Creating Configuration
+
 Create a `.env` file in your project root with your social media credentials:
 
 ```bash
@@ -356,7 +396,7 @@ Contributions are welcome. Feel free to open an issue, suggest improvements, or 
 git clone https://github.com/hyperdrift-io/hyper-post.git
 cd hyper-post
 
-# Install dependencies
+# Install dependencies (always use pnpm)
 pnpm install
 
 # Start development
@@ -367,6 +407,9 @@ pnpm build
 
 # Run tests
 pnpm test
+
+# Link for local development
+pnpm link
 ```
 
 ---

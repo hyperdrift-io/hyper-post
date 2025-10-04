@@ -1,0 +1,158 @@
+[
+  {
+    "name": "test-app",
+    "description": "Test app",
+    "public_docs": "docs/public"
+  },
+  {
+    "name": "peer-dependency-checker",
+    "description": "Smart dependency compatibility checker that prevents peer dependency conflicts before you upgrade. Stop breaking builds - check compatibility first!",
+    "visibility": "PUBLIC",
+    "homepageUrl": "",
+    "metadata": {
+      "updatedAt": "2025-06-25T00:17:19Z",
+      "pushedAt": "2025-06-25T00:17:16Z",
+      "stars": 0,
+      "watchers": 0,
+      "openIssues": 0
+    },
+    "topics": [
+      "automation",
+      "build-tools",
+      "ci-cd",
+      "cli-tool",
+      "dependencies",
+      "dependency-management",
+      "dev-experience",
+      "developer-tools",
+      "devtools",
+      "javascript",
+      "next-js",
+      "nodejs",
+      "npm",
+      "package-manager",
+      "peer-dependencies",
+      "react",
+      "typescript",
+      "upgrade-helper",
+      "compatibility-checker",
+      "hyperdrift"
+    ],
+    "public_docs": "docs/public"
+  },
+  {
+    "name": "genesis",
+    "description": "Genesis - Create scalable web applications stack",
+    "visibility": "PUBLIC",
+    "homepageUrl": "",
+    "metadata": {
+      "updatedAt": "2025-06-25T23:47:55Z",
+      "pushedAt": "2025-06-25T23:47:51Z",
+      "stars": 0,
+      "watchers": 1,
+      "openIssues": 0
+    },
+    "topics": [],
+    "public_docs": "docs/public"
+  },
+  {
+    "name": "yield-max",
+    "description": "Comparison of Decentralised Finance (DefI) Yield Protocols to find the highest Return on Investment available",
+    "visibility": "PUBLIC",
+    "homepageUrl": "https://yieldmax.xyz",
+    "metadata": {
+      "updatedAt": "2025-05-14T21:39:18Z",
+      "pushedAt": "2025-05-14T21:39:15Z",
+      "stars": 0,
+      "watchers": 1,
+      "openIssues": 0
+    },
+    "topics": [
+      "defi",
+      "yield"
+    ],
+    "public_docs": "docs/public"
+  },
+  {
+    "name": "whats-that-again",
+    "description": "What was that again? The app will help you remember exactly what it was",
+    "visibility": "PUBLIC",
+    "homepageUrl": "",
+    "metadata": {
+      "updatedAt": "2025-10-02T04:35:17Z",
+      "pushedAt": "2025-05-14T21:32:06Z",
+      "stars": 1,
+      "watchers": 1,
+      "openIssues": 0
+    },
+    "topics": [
+      "ai",
+      "bookmark-manager",
+      "context-aware",
+      "knowledge-management",
+      "note-taking",
+      "open-source",
+      "personal-assistant",
+      "productivity",
+      "second-brain",
+      "semantic-search"
+    ],
+    "public_docs": "docs/public"
+  },
+  {
+    "name": "alpha-drift",
+    "description": "Alpha Drift is an experimental platform for developing, testing, and analyzing advanced AI-driven decision-making algorithms, with a focus on adaptive learning, real-time data processing, and web3 trading automation.",
+    "visibility": "PUBLIC",
+    "homepageUrl": "",
+    "metadata": {
+      "updatedAt": "2025-05-14T21:23:35Z",
+      "pushedAt": "2025-05-14T21:23:31Z",
+      "stars": 0,
+      "watchers": 1,
+      "openIssues": 0
+    },
+    "topics": [
+      "adaptive-algorithms",
+      "ai",
+      "automation",
+      "blockchain",
+      "crypto",
+      "data-analysis",
+      "decision-making",
+      "experimentation",
+      "machine-learning",
+      "platform",
+      "real-time",
+      "reinforcement-learning",
+      "research",
+      "trading-bots",
+      "typescript",
+      "web3"
+    ],
+    "public_docs": "docs/public"
+  },
+  {
+    "name": "keep-alive",
+    "description": "Keeps your services awake so you can sleep",
+    "visibility": "PUBLIC",
+    "homepageUrl": "https://keep-alive.tech",
+    "metadata": {
+      "updatedAt": "2025-04-29T23:47:25Z",
+      "pushedAt": "2025-04-29T23:47:21Z",
+      "stars": 0,
+      "watchers": 1,
+      "openIssues": 0
+    },
+    "topics": [
+      "cron-jobs",
+      "heartbeat",
+      "keepalive",
+      "uptime-monitor",
+      "anti-idle",
+      "devops",
+      "serverless",
+      "self-hosted"
+    ],
+    "public_docs": "docs/public"
+  }
+]

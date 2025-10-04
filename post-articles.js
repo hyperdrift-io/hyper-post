@@ -1,4 +1,9 @@
 #!/usr/bin/env node
+/**
+ * INTERNAL DEVELOPMENT SCRIPT
+ * This script is for internal HyperDrift development use only.
+ * It is not part of the published HyperPost package.
+ */
 
 const fs = require('fs');
 const path = require('path');
