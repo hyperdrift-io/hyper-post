@@ -1,0 +1,28 @@
+# Development files
+src/
+packages/
+tsconfig*.json
+tsup.config.ts
+jest.config.js
+.eslintrc.js
+.prettierrc
+.github/
+
+# Internal scripts
+post-articles.js
+
+# Development data
+data/
+out/
+dist/*.map
+
+# Environment files (examples only)
+.env*
+!env.example
+
+# Documentation (included in files array)
+# README.md - included
+# env.example - included
+
+# Build artifacts (dist/ included in files array)
+# dist/ - included except map files
