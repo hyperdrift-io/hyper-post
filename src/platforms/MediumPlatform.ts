@@ -1,5 +1,6 @@
 import { BasePlatform, PostAnalytics } from './BasePlatform';
 import { SocialPost, PostingResult } from '../types';
+import { validateAndPrepareContentForMedium, processTagsForMedium } from '../utils/contentFormat';
 import axios from 'axios';
 
 export class MediumPlatform extends BasePlatform {
@@ -21,6 +22,12 @@ export class MediumPlatform extends BasePlatform {
 
       const { integrationToken } = this.credentials;
 
+      // Validate and convert content format for Medium (must be Markdown)
+      const preparedContent = await validateAndPrepareContentForMedium(content.content);
+
+      // Process tags for Medium (extract from content, validate limits)
+      const processedTags = processTagsForMedium(content.tags, preparedContent);
+
       // First get user info to get author ID
       const userResponse = await axios.get('https://api.medium.com/v1/me', {
         headers: {
@@ -35,11 +42,11 @@ export class MediumPlatform extends BasePlatform {
 
       // Prepare post data for Medium
       const postData = {
-        title: content.title || content.content.substring(0, 50) + (content.content.length > 50 ? '...' : ''),
+        title: content.title || preparedContent.substring(0, 50) + (preparedContent.length > 50 ? '...' : ''),
         contentFormat: 'markdown',
-        content: content.content,
+        content: preparedContent,
         canonicalUrl: content.url,
-        tags: content.tags || [],
+        tags: processedTags,
         publishStatus: 'public'
       };
 
