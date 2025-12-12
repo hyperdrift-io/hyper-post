@@ -108,7 +108,12 @@ export class BlueskyPlatform extends BasePlatform {
         uri: `at://${username}/app.bsky.feed.post/${postId}`
       });
 
-      const post = threadResponse.data.thread.post as any;
+      const thread = threadResponse.data.thread;
+      if (!thread || typeof thread !== 'object' || !('post' in thread)) {
+        throw new Error('Unable to retrieve post data from thread');
+      }
+
+      const post = (thread as any).post;
 
       return {
         likes: post.likeCount || 0,
