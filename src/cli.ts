@@ -787,4 +787,659 @@ program
     }
   });
 
+// ==================== SCHEDULING COMMANDS ====================
+
+program
+  .command('schedule')
+  .description('Schedule a post for future publishing')
+  .requiredOption('-c, --content <content>', 'Post content')
+  .requiredOption('--at <datetime>', 'Schedule datetime (ISO 8601 or "YYYY-MM-DD HH:mm")')
+  .requiredOption('-p, --platforms <platforms>', 'Comma-separated list of platforms')
+  .option('-t, --title <title>', 'Post title')
+  .option('-u, --url <url>', 'URL to include')
+  .option('--tags <tags>', 'Comma-separated tags')
+  .action(async (options) => {
+    try {
+      const credentials = loadCredentials();
+      const hyperPost = new HyperPost(credentials);
+
+      // Parse datetime
+      let scheduledAt: Date;
+      try {
+        scheduledAt = new Date(options.at);
+        if (isNaN(scheduledAt.getTime())) {
+          throw new Error('Invalid date');
+        }
+      } catch {
+        console.error('❌ Invalid datetime format. Use ISO 8601 or "YYYY-MM-DD HH:mm"');
+        console.error('Examples:');
+        console.error('  --at "2024-02-01T10:00:00Z"');
+        console.error('  --at "2024-02-01 10:00"');
+        process.exit(1);
+      }
+
+      if (scheduledAt <= new Date()) {
+        console.error('❌ Scheduled time must be in the future');
+        process.exit(1);
+      }
+
+      const platforms = options.platforms.split(',').map((p: string) => p.trim());
+
+      // Validate platforms
+      const configuredPlatforms = hyperPost.getConfiguredPlatforms();
+      const invalidPlatforms = platforms.filter((p: string) => !configuredPlatforms.includes(p));
+      if (invalidPlatforms.length > 0) {
+        console.error(`❌ Invalid platforms: ${invalidPlatforms.join(', ')}`);
+        console.error(`Configured platforms: ${configuredPlatforms.join(', ')}`);
+        process.exit(1);
+      }
+
+      const tags = options.tags ? options.tags.split(',').map((tag: string) => tag.trim()) : undefined;
+      const contentHash = crypto.createHash('sha256')
+        .update(`${options.title || ''}|${options.content}|${options.url || ''}`)
+        .digest('hex');
+
+      const scheduled = await prisma.scheduledPost.create({
+        data: {
+          contentHash,
+          title: options.title,
+          content: options.content,
+          url: options.url,
+          tags: tags ? JSON.stringify(tags) : null,
+          platforms: JSON.stringify(platforms),
+          scheduledAt,
+          status: 'pending'
+        }
+      });
+
+      console.log('📅 Post scheduled successfully!');
+      console.log('=' .repeat(50));
+      console.log(`ID: ${scheduled.id}`);
+      console.log(`Scheduled for: ${scheduledAt.toLocaleString()}`);
+      console.log(`Platforms: ${platforms.join(', ')}`);
+      console.log(`Content: ${options.content.substring(0, 100)}${options.content.length > 100 ? '...' : ''}`);
+      console.log('');
+      console.log('💡 Run "hyper-post schedule-run" via cron to process scheduled posts');
+      console.log('   Example crontab: */5 * * * * hyper-post schedule-run');
+
+    } catch (error) {
+      console.error('Error:', error instanceof Error ? error.message : 'Unknown error');
+      process.exit(1);
+    }
+  });
+
+program
+  .command('schedule-list')
+  .description('List scheduled posts')
+  .option('--status <status>', 'Filter by status (pending, posted, failed, cancelled)')
+  .option('--limit <number>', 'Limit results', '20')
+  .action(async (options) => {
+    try {
+      const where: any = {};
+      if (options.status) {
+        where.status = options.status;
+      }
+
+      const scheduled = await prisma.scheduledPost.findMany({
+        where,
+        orderBy: { scheduledAt: 'asc' },
+        take: parseInt(options.limit) || 20
+      });
+
+      if (scheduled.length === 0) {
+        console.log('📭 No scheduled posts found');
+        return;
+      }
+
+      console.log(`📅 Scheduled Posts (${scheduled.length}):`);
+      console.log('=' .repeat(70));
+
+      scheduled.forEach((post, index) => {
+        const platforms = JSON.parse(post.platforms);
+        const statusIcon = {
+          pending: '⏳',
+          posted: '✅',
+          failed: '❌',
+          cancelled: '🚫'
+        }[post.status] || '❓';
+
+        console.log(`${index + 1}. ${statusIcon} [${post.status.toUpperCase()}]`);
+        console.log(`   ID: ${post.id}`);
+        console.log(`   Scheduled: ${post.scheduledAt.toLocaleString()}`);
+        console.log(`   Platforms: ${platforms.join(', ')}`);
+        if (post.title) console.log(`   Title: ${post.title}`);
+        console.log(`   Content: ${post.content.substring(0, 80)}${post.content.length > 80 ? '...' : ''}`);
+        if (post.error) console.log(`   Error: ${post.error}`);
+        console.log('');
+      });
+
+    } catch (error) {
+      console.error('Error:', error instanceof Error ? error.message : 'Unknown error');
+      process.exit(1);
+    }
+  });
+
+program
+  .command('schedule-cancel <id>')
+  .description('Cancel a scheduled post')
+  .action(async (id) => {
+    try {
+      const post = await prisma.scheduledPost.findUnique({ where: { id } });
+
+      if (!post) {
+        console.error(`❌ Scheduled post ${id} not found`);
+        process.exit(1);
+      }
+
+      if (post.status !== 'pending') {
+        console.error(`❌ Cannot cancel post with status: ${post.status}`);
+        process.exit(1);
+      }
+
+      await prisma.scheduledPost.update({
+        where: { id },
+        data: { status: 'cancelled' }
+      });
+
+      console.log(`🚫 Scheduled post ${id} cancelled`);
+
+    } catch (error) {
+      console.error('Error:', error instanceof Error ? error.message : 'Unknown error');
+      process.exit(1);
+    }
+  });
+
+program
+  .command('schedule-run')
+  .description('Process due scheduled posts (run via cron)')
+  .option('--dry-run', 'Preview without posting')
+  .action(async (options) => {
+    try {
+      const credentials = loadCredentials();
+      const hyperPost = new HyperPost(credentials);
+
+      const now = new Date();
+      const duePosts = await prisma.scheduledPost.findMany({
+        where: {
+          status: 'pending',
+          scheduledAt: { lte: now }
+        },
+        orderBy: { scheduledAt: 'asc' }
+      });
+
+      if (duePosts.length === 0) {
+        console.log('📭 No scheduled posts due');
+        return;
+      }
+
+      console.log(`🚀 Processing ${duePosts.length} scheduled post(s)...`);
+      console.log('');
+
+      for (const scheduledPost of duePosts) {
+        const platforms = JSON.parse(scheduledPost.platforms);
+        const tags = scheduledPost.tags ? JSON.parse(scheduledPost.tags) : undefined;
+
+        console.log(`📝 Processing: ${scheduledPost.title || scheduledPost.content.substring(0, 50)}...`);
+        console.log(`   Platforms: ${platforms.join(', ')}`);
+
+        if (options.dryRun) {
+          console.log(`   🔍 Would post now (dry-run)`);
+          continue;
+        }
+
+        try {
+          const post: SocialPost = {
+            content: scheduledPost.content,
+            title: scheduledPost.title || undefined,
+            url: scheduledPost.url || undefined,
+            tags
+          };
+
+          const result = await hyperPost.postToPlatforms(platforms, post);
+
+          if (result.failed === 0) {
+            await prisma.scheduledPost.update({
+              where: { id: scheduledPost.id },
+              data: { status: 'posted', postedAt: new Date() }
+            });
+            console.log(`   ✅ Posted successfully`);
+          } else {
+            const errors = result.results.filter(r => !r.success).map(r => `${r.platform}: ${r.error}`);
+            await prisma.scheduledPost.update({
+              where: { id: scheduledPost.id },
+              data: { status: 'failed', error: errors.join('; ') }
+            });
+            console.log(`   ❌ Failed: ${errors.join(', ')}`);
+          }
+        } catch (error) {
+          const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+          await prisma.scheduledPost.update({
+            where: { id: scheduledPost.id },
+            data: { status: 'failed', error: errorMsg }
+          });
+          console.log(`   ❌ Error: ${errorMsg}`);
+        }
+
+        console.log('');
+      }
+
+      if (options.dryRun) {
+        console.log('💡 Remove --dry-run to actually post');
+      }
+
+    } catch (error) {
+      console.error('Error:', error instanceof Error ? error.message : 'Unknown error');
+      process.exit(1);
+    }
+  });
+
+// ==================== BLOG PROMOTION COMMANDS ====================
+
+program
+  .command('promote')
+  .description('Promote a blog article to social media platforms')
+  .option('--blog-dir <path>', 'Path to blog content directory')
+  .option('--base-url <url>', 'Base URL for the blog (default: https://hyperdrift.io)')
+  .option('--slug <slug>', 'Specific blog post slug to promote')
+  .option('--recent <days>', 'Promote posts from the last N days', '7')
+  .option('-p, --platforms <platforms>', 'Comma-separated list of platforms')
+  .option('--full-content', 'Use full article content for Dev.to/Medium (default: excerpt only)')
+  .option('--schedule <datetime>', 'Schedule the post instead of posting immediately')
+  .option('--dry-run', 'Preview the promotion without posting')
+  .option('--list', 'List available blog posts without promoting')
+  .action(async (options) => {
+    try {
+      const { readBlogPosts, getBlogPostBySlug, generatePromotion, formatPromotionPreview, getRecentUnpromotedPosts } = await import('./blog-promotion');
+      const fs = await import('fs');
+      const path = await import('path');
+
+      // Determine blog directory
+      let blogDir = options.blogDir;
+      if (!blogDir) {
+        // Try common locations relative to hyper-post
+        const possiblePaths = [
+          path.join(process.cwd(), '../hyper-drift/content/blog'),
+          path.join(process.cwd(), 'content/blog'),
+          '/Users/yann/dev/hyperdrift-io/hyper-drift/content/blog'
+        ];
+
+        for (const p of possiblePaths) {
+          if (fs.existsSync(p)) {
+            blogDir = p;
+            break;
+          }
+        }
+
+        if (!blogDir) {
+          console.error('❌ Could not find blog content directory.');
+          console.error('   Use --blog-dir to specify the path.');
+          process.exit(1);
+        }
+      }
+
+      const baseUrl = options.baseUrl || 'https://hyperdrift.io';
+
+      // List mode
+      if (options.list) {
+        const posts = readBlogPosts(blogDir);
+        console.log(`📚 Found ${posts.length} blog posts in ${blogDir}:\n`);
+        posts.forEach((post, i) => {
+          const date = new Date(post.date).toLocaleDateString();
+          console.log(`${i + 1}. [${date}] ${post.title}`);
+          console.log(`   Slug: ${post.slug}`);
+          console.log(`   Tags: ${post.tags.join(', ')}`);
+          console.log('');
+        });
+        return;
+      }
+
+      // Get the post(s) to promote
+      let postsToPromote;
+      if (options.slug) {
+        const post = getBlogPostBySlug(blogDir, options.slug);
+        if (!post) {
+          console.error(`❌ Blog post not found: ${options.slug}`);
+          process.exit(1);
+        }
+        postsToPromote = [post];
+      } else {
+        postsToPromote = getRecentUnpromotedPosts(blogDir, parseInt(options.recent) || 7);
+        if (postsToPromote.length === 0) {
+          console.log(`📭 No blog posts found from the last ${options.recent || 7} days.`);
+          console.log('   Use --slug to promote a specific post, or --recent to adjust the timeframe.');
+          return;
+        }
+      }
+
+      console.log(`🚀 Promoting ${postsToPromote.length} blog post(s):\n`);
+
+      for (const post of postsToPromote) {
+        // Read full content if needed
+        let fullContent;
+        if (options.fullContent) {
+          const fileContent = fs.readFileSync(post.filePath, 'utf8');
+          // Remove frontmatter for the content
+          const contentMatch = fileContent.match(/^---\s*\n[\s\S]*?\n---\s*\n([\s\S]*)$/);
+          fullContent = contentMatch ? contentMatch[1] : fileContent;
+        }
+
+        const promo = generatePromotion(post, baseUrl, {
+          includeExcerpt: true,
+          maxContentLength: 280
+        });
+
+        console.log(formatPromotionPreview(promo));
+
+        if (options.dryRun) {
+          console.log('🔍 Dry run - would post to platforms');
+          continue;
+        }
+
+        // Load credentials and create HyperPost instance
+        const credentials = loadCredentials();
+        const hyperPost = new HyperPost(credentials);
+
+        // Determine target platforms
+        let targetPlatforms: string[];
+        if (options.platforms) {
+          targetPlatforms = options.platforms.split(',').map((p: string) => p.trim());
+        } else {
+          targetPlatforms = hyperPost.getConfiguredPlatforms();
+        }
+
+        // Build the social post
+        const socialPost: SocialPost = {
+          content: promo.content,
+          title: promo.title,
+          url: promo.url,
+          tags: promo.tags
+        };
+
+        // For Dev.to/Medium, use full content if available
+        if (fullContent && (targetPlatforms.includes('devto') || targetPlatforms.includes('medium'))) {
+          // Create a separate post for long-form platforms
+          const longFormPlatforms = targetPlatforms.filter(p => p === 'devto' || p === 'medium');
+          const shortFormPlatforms = targetPlatforms.filter(p => p !== 'devto' && p !== 'medium');
+
+          if (longFormPlatforms.length > 0) {
+            const longFormPost: SocialPost = {
+              content: fullContent + `\n\n---\n\n*Originally published at [HyperDrift](${promo.url})*`,
+              title: promo.title,
+              url: promo.url,
+              tags: promo.tags
+            };
+
+            console.log(`📰 Posting full article to: ${longFormPlatforms.join(', ')}`);
+
+            if (options.schedule) {
+              const scheduledAt = new Date(options.schedule);
+              if (isNaN(scheduledAt.getTime())) {
+                console.error('❌ Invalid schedule datetime');
+                process.exit(1);
+              }
+              // Schedule instead of posting
+              const contentHash = crypto.createHash('sha256')
+                .update(`${longFormPost.title}|${longFormPost.content}|${longFormPost.url}`)
+                .digest('hex');
+
+              await prisma.scheduledPost.create({
+                data: {
+                  contentHash,
+                  title: longFormPost.title,
+                  content: longFormPost.content,
+                  url: longFormPost.url,
+                  tags: longFormPost.tags ? JSON.stringify(longFormPost.tags) : null,
+                  platforms: JSON.stringify(longFormPlatforms),
+                  scheduledAt,
+                  status: 'pending'
+                }
+              });
+              console.log(`📅 Scheduled for: ${scheduledAt.toLocaleString()}`);
+            } else {
+              const result = await hyperPost.postToPlatforms(longFormPlatforms as any, longFormPost);
+              result.results.forEach(r => {
+                if (r.success) {
+                  console.log(`✅ ${r.platform}: ${r.url}`);
+                } else {
+                  console.log(`❌ ${r.platform}: ${r.error}`);
+                }
+              });
+            }
+          }
+
+          if (shortFormPlatforms.length > 0) {
+            console.log(`\n🐦 Posting excerpt to: ${shortFormPlatforms.join(', ')}`);
+
+            if (options.schedule) {
+              const scheduledAt = new Date(options.schedule);
+              const contentHash = crypto.createHash('sha256')
+                .update(`${socialPost.title}|${socialPost.content}|${socialPost.url}`)
+                .digest('hex');
+
+              await prisma.scheduledPost.create({
+                data: {
+                  contentHash,
+                  title: socialPost.title,
+                  content: socialPost.content,
+                  url: socialPost.url,
+                  tags: socialPost.tags ? JSON.stringify(socialPost.tags) : null,
+                  platforms: JSON.stringify(shortFormPlatforms),
+                  scheduledAt,
+                  status: 'pending'
+                }
+              });
+              console.log(`📅 Scheduled for: ${scheduledAt.toLocaleString()}`);
+            } else {
+              const result = await hyperPost.postToPlatforms(shortFormPlatforms as any, socialPost);
+              result.results.forEach(r => {
+                if (r.success) {
+                  console.log(`✅ ${r.platform}: ${r.url}`);
+                } else {
+                  console.log(`❌ ${r.platform}: ${r.error}`);
+                }
+              });
+            }
+          }
+        } else {
+          // Standard posting to all platforms
+          console.log(`📤 Posting to: ${targetPlatforms.join(', ')}`);
+
+          if (options.schedule) {
+            const scheduledAt = new Date(options.schedule);
+            if (isNaN(scheduledAt.getTime())) {
+              console.error('❌ Invalid schedule datetime');
+              process.exit(1);
+            }
+
+            const contentHash = crypto.createHash('sha256')
+              .update(`${socialPost.title}|${socialPost.content}|${socialPost.url}`)
+              .digest('hex');
+
+            await prisma.scheduledPost.create({
+              data: {
+                contentHash,
+                title: socialPost.title,
+                content: socialPost.content,
+                url: socialPost.url,
+                tags: socialPost.tags ? JSON.stringify(socialPost.tags) : null,
+                platforms: JSON.stringify(targetPlatforms),
+                scheduledAt,
+                status: 'pending'
+              }
+            });
+            console.log(`📅 Scheduled for: ${scheduledAt.toLocaleString()}`);
+          } else {
+            const result = await hyperPost.postToPlatforms(targetPlatforms as any, socialPost);
+            result.results.forEach(r => {
+              if (r.success) {
+                console.log(`✅ ${r.platform}: ${r.url}`);
+              } else {
+                console.log(`❌ ${r.platform}: ${r.error}`);
+              }
+            });
+          }
+        }
+
+        console.log('');
+      }
+
+      if (options.dryRun) {
+        console.log('💡 Remove --dry-run to actually post');
+      }
+
+    } catch (error) {
+      console.error('Error:', error instanceof Error ? error.message : 'Unknown error');
+      process.exit(1);
+    }
+  });
+
+// ==================== ECOSYSTEM ANNOUNCEMENTS ====================
+
+program
+  .command('announce-ecosystem')
+  .description('Announce new ecosystem content (releases, journeys) from hyper-drift sync')
+  .option('--file <path>', 'Path to pending-announcements.json (default: ../hyper-drift/data/pending-announcements.json)')
+  .option('-p, --platforms <platforms>', 'Comma-separated list of platforms')
+  .option('--dry-run', 'Preview announcements without posting')
+  .option('--delay <seconds>', 'Delay between posts in seconds (default: 60)', '60')
+  .action(async (options) => {
+    try {
+      const fs = await import('fs');
+      const path = await import('path');
+
+      // Find pending announcements file
+      let filePath = options.file;
+      if (!filePath) {
+        const possiblePaths = [
+          path.join(process.cwd(), '../hyper-drift/data/pending-announcements.json'),
+          path.join(process.cwd(), 'data/pending-announcements.json'),
+          '/Users/yann/dev/hyperdrift-io/hyper-drift/data/pending-announcements.json'
+        ];
+
+        for (const p of possiblePaths) {
+          if (fs.existsSync(p)) {
+            filePath = p;
+            break;
+          }
+        }
+
+        if (!filePath) {
+          console.log('📭 No pending announcements found');
+          console.log('   Run hyper-drift/scripts/sync-ecosystem.mjs first');
+          return;
+        }
+      }
+
+      const content = fs.readFileSync(filePath, 'utf8');
+      const data = JSON.parse(content);
+
+      if (!data.items || data.items.length === 0) {
+        console.log('📭 No pending announcements');
+        return;
+      }
+
+      console.log(`📢 Found ${data.items.length} pending announcement(s):\n`);
+
+      const credentials = loadCredentials();
+      const hyperPost = new HyperPost(credentials);
+
+      // Determine target platforms
+      let targetPlatforms: string[];
+      if (options.platforms) {
+        targetPlatforms = options.platforms.split(',').map((p: string) => p.trim());
+      } else {
+        targetPlatforms = hyperPost.getConfiguredPlatforms();
+      }
+
+      const delay = parseInt(options.delay) || 60;
+      const announcedPath = path.join(path.dirname(filePath), 'announced-content.json');
+
+      for (let i = 0; i < data.items.length; i++) {
+        const item = data.items[i];
+        
+        console.log(`${i + 1}. [${item.type.toUpperCase()}] ${item.title}`);
+        
+        // Generate announcement content
+        let postContent: string;
+        if (item.type === 'release') {
+          postContent = `🚀 ${item.title}\n\n${(item.body || '').split('\\n')[0] || 'Check out the latest release!'}\n\n${item.url}`;
+        } else {
+          postContent = `📚 New from HyperDrift: ${item.title}\n\n${item.excerpt || 'Read more about our journey.'}\n\n${item.url}`;
+        }
+
+        console.log(`   Content: ${postContent.substring(0, 100)}${postContent.length > 100 ? '...' : ''}`);
+        console.log(`   Platforms: ${targetPlatforms.join(', ')}`);
+
+        if (options.dryRun) {
+          console.log('   🔍 [DRY RUN] Would post\n');
+          continue;
+        }
+
+        try {
+          const post: SocialPost = {
+            content: postContent,
+            title: item.title,
+            url: item.url,
+            tags: [item.type, 'hyperdrift', item.app]
+          };
+
+          const result = await hyperPost.postToPlatforms(targetPlatforms as any, post);
+          
+          result.results.forEach(r => {
+            if (r.success) {
+              console.log(`   ✅ ${r.platform}: ${r.url || 'Posted'}`);
+            } else {
+              console.log(`   ❌ ${r.platform}: ${r.error}`);
+            }
+          });
+
+          // Mark as announced
+          let announced = { releases: [], journeys: [] };
+          try {
+            if (fs.existsSync(announcedPath)) {
+              announced = JSON.parse(fs.readFileSync(announcedPath, 'utf8'));
+            }
+          } catch {}
+
+          const announcement = {
+            slug: item.slug,
+            announcedAt: new Date().toISOString(),
+            ...(item.contentHash ? { contentHash: item.contentHash } : {})
+          };
+
+          if (item.type === 'release') {
+            (announced.releases as any[]).push(announcement);
+          } else {
+            (announced.journeys as any[]).push(announcement);
+          }
+
+          fs.writeFileSync(announcedPath, JSON.stringify(announced, null, 2));
+
+        } catch (error) {
+          console.log(`   ❌ Error: ${error instanceof Error ? error.message : 'Unknown'}`);
+        }
+
+        // Delay between posts
+        if (i < data.items.length - 1 && !options.dryRun) {
+          console.log(`   ⏳ Waiting ${delay}s before next post...\n`);
+          await new Promise(resolve => setTimeout(resolve, delay * 1000));
+        } else {
+          console.log('');
+        }
+      }
+
+      // Clear pending announcements file after processing
+      if (!options.dryRun) {
+        fs.writeFileSync(filePath, JSON.stringify({ generated: null, items: [] }, null, 2));
+        console.log('✅ Cleared pending announcements');
+      } else {
+        console.log('💡 Remove --dry-run to actually post');
+      }
+
+    } catch (error) {
+      console.error('Error:', error instanceof Error ? error.message : 'Unknown error');
+      process.exit(1);
+    }
+  });
+
 program.parse();

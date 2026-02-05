@@ -67,5 +67,23 @@ model PostAnalytics {
   @@map("post_analytics")
 }
 
+model ScheduledPost {
+  id          String   @id @default(cuid())
+  contentHash String
+  title       String?
+  content     String
+  url         String?
+  tags        String?  // JSON array of tags
+  platforms   String   // JSON array of platform names
+  scheduledAt DateTime
+  status      String   @default("pending") // pending, posted, failed, cancelled
+  createdAt   DateTime @default(now())
+  postedAt    DateTime?
+  error       String?
+
+  @@index([status, scheduledAt])
+  @@map("scheduled_posts")
+}
+
 // Indexes for performance
 // Note: Indexes are automatically created for @unique and foreign key fields

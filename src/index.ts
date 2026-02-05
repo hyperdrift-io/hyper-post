@@ -12,3 +12,13 @@ export {
   BlueskyPlatform,
   DiscordPlatform
 } from './platforms';
+export {
+  readBlogPosts,
+  getBlogPostBySlug,
+  generatePromotion,
+  generatePromotions,
+  getRecentUnpromotedPosts,
+  formatPromotionPreview,
+  platformFormatters
+} from './blog-promotion';
+export type { BlogPostMetadata, SocialPromotion } from './blog-promotion';
