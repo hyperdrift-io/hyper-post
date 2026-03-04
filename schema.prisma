@@ -85,5 +85,38 @@ model ScheduledPost {
   @@map("scheduled_posts")
 }
 
+model IntentSignal {
+  id          String   @id @default(cuid())
+  appName     String
+  platform    String   // 'reddit' | 'x' | 'linkedin' | 'quora'
+  url         String   @unique
+  title       String
+  excerpt     String
+  intentScore Int      @default(0) // 0-100
+  status      String   @default("new") // 'new' | 'drafting' | 'replied' | 'ignored'
+  createdAt   DateTime @default(now())
+  drafts      Draft[]
+
+  @@index([appName, status])
+  @@index([intentScore])
+  @@map("intent_signals")
+}
+
+model Draft {
+  id        String        @id @default(cuid())
+  appName   String
+  platform  String        // 'reddit' | 'hackernews' | 'bluesky' | 'mastodon' | 'telegram' | 'devto'
+  content   String
+  metadata  String        @default("{}") // JSON: subreddit, title, tags, threadUrl, etc.
+  status    String        @default("draft") // 'draft' | 'approved' | 'posted'
+  signalId  String?
+  signal    IntentSignal? @relation(fields: [signalId], references: [id], onDelete: SetNull)
+  createdAt DateTime      @default(now())
+  postedAt  DateTime?
+
+  @@index([appName, status])
+  @@map("drafts")
+}
+
 // Indexes for performance
 // Note: Indexes are automatically created for @unique and foreign key fields

@@ -38,6 +38,7 @@ export type SupportedPlatforms =
   | 'discord'
   | 'reddit'
   | 'hackernews'
+  | 'telegram'
   | 'devto'
   | 'medium'
   | 'tumblr'

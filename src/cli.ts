@@ -1442,4 +1442,102 @@ program
     }
   });
 
+// === Distribution commands ===
+
+program
+  .command('launch')
+  .description('Generate launch drafts for an app (HN, Reddit, social, directories)')
+  .argument('<app-name>', 'App name (must match GROWTH.md app field)')
+  .option('--app-dir <path>', 'Path to app directory (default: ~/dev/hyperdrift/apps/<app-name>)')
+  .option('--dry-run', 'Preview drafts without saving to DB')
+  .action(async (appName, options) => {
+    try {
+      const { generateLaunchDrafts } = await import('./commands/launch');
+      await generateLaunchDrafts(appName, {
+        appDir: options.appDir,
+        dryRun: options.dryRun,
+      });
+    } catch (err) {
+      console.error(`Error: ${(err as Error).message}`);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('listen')
+  .description('Fetch intent signals for an app and generate reply drafts')
+  .argument('<app-name>', 'App name')
+  .option('--app-dir <path>', 'Path to app directory')
+  .option('--min-score <n>', 'Minimum intent score 0-100 (default: 50)', '50')
+  .option('--dry-run', 'Show signals without saving')
+  .action(async (appName, options) => {
+    try {
+      const { listenForSignals } = await import('./commands/listen');
+      await listenForSignals(appName, {
+        appDir: options.appDir,
+        minScore: parseInt(options.minScore, 10),
+        dryRun: options.dryRun,
+      });
+    } catch (err) {
+      console.error(`Error: ${(err as Error).message}`);
+      process.exit(1);
+    }
+  });
+
+const replyCmd = program
+  .command('reply')
+  .description('Manage reply drafts from intent signals');
+
+replyCmd
+  .command('list')
+  .description('List pending reply drafts')
+  .option('--app <name>', 'Filter by app name')
+  .option('--min-score <n>', 'Minimum intent score', '0')
+  .option('--status <status>', 'Filter by status (draft|approved|posted)', 'draft')
+  .action(async (options) => {
+    const { listDrafts } = await import('./commands/reply');
+    await listDrafts({ app: options.app, status: options.status });
+  });
+
+replyCmd
+  .command('view <id>')
+  .description('Show full content of a draft')
+  .action(async (id) => {
+    const { viewDraft } = await import('./commands/reply');
+    await viewDraft(id);
+  });
+
+replyCmd
+  .command('approve <id>')
+  .description('Mark a draft as approved for posting')
+  .action(async (id) => {
+    const { approveDraft } = await import('./commands/reply');
+    await approveDraft(id);
+  });
+
+replyCmd
+  .command('post <id>')
+  .description('Post an approved draft to its platform')
+  .action(async (id) => {
+    const { postDraft } = await import('./commands/reply');
+    await postDraft(id);
+  });
+
+replyCmd
+  .command('post-all')
+  .description('Post all approved drafts for an app')
+  .requiredOption('--app <name>', 'App name')
+  .action(async (options) => {
+    const { postAllApproved } = await import('./commands/reply');
+    await postAllApproved(options.app);
+  });
+
+replyCmd
+  .command('ignore <id>')
+  .description('Ignore a draft and its signal')
+  .action(async (id) => {
+    const { ignoreDraft } = await import('./commands/reply');
+    await ignoreDraft(id);
+  });
+
 program.parse();

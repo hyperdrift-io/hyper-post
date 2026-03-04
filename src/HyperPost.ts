@@ -13,6 +13,7 @@ import {
   RedditPlatform,
   DevtoPlatform,
   MediumPlatform,
+  TelegramPlatform,
   BasePlatform
 } from './platforms';
 import * as crypto from 'crypto';
@@ -39,7 +40,8 @@ export class HyperPost {
         { name: 'reddit', displayName: 'Reddit' },
         { name: 'discord', displayName: 'Discord' },
         { name: 'devto', displayName: 'Dev.to' },
-        { name: 'medium', displayName: 'Medium' }
+        { name: 'medium', displayName: 'Medium' },
+        { name: 'telegram', displayName: 'Telegram' }
       ];
 
       for (const platform of platformData) {
@@ -184,6 +186,11 @@ export class HyperPost {
     // Medium
     if (credentials.medium) {
       this.platforms.set('medium', new MediumPlatform(credentials.medium));
+    }
+
+    // Telegram
+    if (credentials.telegram) {
+      this.platforms.set('telegram', new TelegramPlatform(credentials.telegram));
     }
   }
 

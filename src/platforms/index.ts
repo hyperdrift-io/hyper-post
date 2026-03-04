@@ -5,3 +5,4 @@ export { DiscordPlatform } from './DiscordPlatform';
 export { RedditPlatform } from './RedditPlatform';
 export { DevtoPlatform } from './DevtoPlatform';
 export { MediumPlatform } from './MediumPlatform';
+export { TelegramPlatform } from './TelegramPlatform';
