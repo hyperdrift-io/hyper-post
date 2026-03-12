@@ -1,6 +1,8 @@
 # AGENTS.md - HyperPost
 
 > Guidelines for AI agents working in this codebase.
+>
+> Also read: `~/dev/hyperdrift/AGENTS.md` — workspace-level context (deploy tooling, fleet management, HD infra).
 
 ## Project Overview
 
