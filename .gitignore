@@ -1,6 +1,12 @@
 # Dependencies
 node_modules/
 
+# Local env files and backups
+.env
+.env.*
+.env*~
+*~
+
 # Configuration files are stored securely in:
 # ~/.config/hyper-post/signup-data.json (credentials & templates)
 # ~/.config/hyper-post/config.json (default template settings)
