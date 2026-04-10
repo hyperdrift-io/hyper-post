@@ -204,7 +204,7 @@ For CI/CD, Docker, or custom setups, you can override stored credentials with en
 ```bash
 # Mastodon
 export MASTODON_INSTANCE=your-instance.social
-export MASTODON_ACCESS_TOKEN=<paste-mastodon-access-token>
+export MASTODON_ACCESS_TOKEN=your_access_token
 
 # Bluesky
 export BLUESKY_IDENTIFIER=your-handle.bsky.social
