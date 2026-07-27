@@ -894,14 +894,14 @@ program
       console.log(`📅 Scheduled Posts (${scheduled.length}):`);
       console.log('=' .repeat(70));
 
-      scheduled.forEach((post, index) => {
+      scheduled.forEach((post: { platforms: string; status: string; id: unknown; scheduledAt: Date; title?: unknown; content: string; error?: unknown }, index: number) => {
         const platforms = JSON.parse(post.platforms);
-        const statusIcon = {
+        const statusIcon = ({
           pending: '⏳',
           posted: '✅',
           failed: '❌',
           cancelled: '🚫'
-        }[post.status] || '❓';
+        } as Record<string, string>)[post.status] || '❓';
 
         console.log(`${index + 1}. ${statusIcon} [${post.status.toUpperCase()}]`);
         console.log(`   ID: ${post.id}`);
